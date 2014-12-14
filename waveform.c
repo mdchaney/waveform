@@ -283,8 +283,6 @@ int main(int argc, char **argv) {
 	int bits_per_sample, channel_count, sample_count, block_align;
 	int32_t sample_rate;
 
-	long bres1, bres2;
-
 	while (!we_are_done) {
 
 		struct {
@@ -392,6 +390,7 @@ int main(int argc, char **argv) {
 			 *       9000                  1000                   0
 			 *       9001                   999                   1
 			 *       9005                   995                   5
+			 *       9499                   501                 499
 			 *       9500                   500                 500
 			 *       9999                     1                 999
 			 *
@@ -401,9 +400,76 @@ int main(int argc, char **argv) {
 			 * exceeds 45 degrees (at "points / 2") we have to use "j+1"
 			 * more often than "j".
 			 *
+			 * Take the first case, where samples is between 9000 and 9499.
+			 * Generalized (with integer arithmetic):
+			 *
+			 * j = samples / points
+			 * leftover = samples - (j * points)
+			 *
+			 * At this point with the example numbers above "samples" is
+			 * "1000" * and "leftover" is the last column.  For our example
+			 * we examine numbers where "leftover / points < 0.5" for
+			 * simplicity.  In that case we need to stick between 0 and 499 
+			 * "j+1" sample groups in with the other samples.  So every so
+			 * often we have to grab "j+1" instead of "j".
+			 *
 			 */
 
+			long j = sample_count / points;
+			long leftover = sample_count - (j * points);
 
+			fprintf(stderr, "j: %ld, leftover: %ld\n", j, leftover);
+
+			long samples_left = sample_count;
+			int sample_group_sizes[10000];
+
+			int i = 0, jump_at, jump_counter = 0;
+			int under_45=1;
+
+			if (leftover > points / 2) {
+				under_45 = 0;
+				jump_at = points / (points - leftover);
+
+				while (samples_left > 0) {
+					if (jump_counter < jump_at) {
+						samples_left -= j+1;
+						sample_group_sizes[i] = j+1;
+					} else {
+						samples_left -= j;
+						sample_group_sizes[i] = j;
+						jump_counter = 0;
+					}
+					i++;
+					jump_counter++;
+				}
+
+			} else {
+				under_45 = 1;
+				jump_at = points / (leftover + 1);
+
+				while (samples_left > 0) {
+					if (jump_counter < jump_at) {
+						samples_left -= j;
+						sample_group_sizes[i] = j;
+					} else {
+						samples_left -= j+1;
+						sample_group_sizes[i] = j+1;
+						jump_counter = 0;
+					}
+					i++;
+					jump_counter++;
+				}
+
+			}
+
+			samples_left = sample_count;
+
+			for (i=0 ; i<points; i++) {
+				fprintf(stderr, "%5d:   %10d   %10d\n", i, sample_group_sizes[i], samples_left);
+				samples_left -= sample_group_sizes[i];
+			}
+
+			fprintf(stderr, "%5d:                %10d\n", i, samples_left);
 
 		} else if (strncmp(chunk_header.chunk_type, "COMM", 4) == 0) {
 			fprintf(stderr, "Found COMM chunk with length %d\n", chunk_length);
