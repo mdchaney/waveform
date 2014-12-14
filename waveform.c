@@ -380,6 +380,27 @@ int main(int argc, char **argv) {
 			 * say "j" and "j+1".  When to use "j" and when to use "j+1" is
 			 * the trick.
 			 *
+			 * Let's say there are 9000 samples and we want 1000 points.
+			 * In that case each point will be computed from 9 samples.
+			 *
+			 * If we add 1 sample then we're at 9001 samples.  In that case
+			 * we will need 999 groups of 9 samples and one group of 10
+			 * samples.  If we have 9005 samples then it'll be 995 groups
+			 * of 9 samples and 5 groups of 10 samples.
+			 *
+			 *    Samples            9 samples/group    10 samples/group
+			 *       9000                  1000                   0
+			 *       9001                   999                   1
+			 *       9005                   995                   5
+			 *       9500                   500                 500
+			 *       9999                     1                 999
+			 *
+			 * Here's where it gets weird.  We can actually again employ
+			 * Bresenham's algorithm to determine the interval at which we
+			 * use "j" samples and when we use "j+1".  As the "slope"
+			 * exceeds 45 degrees (at "points / 2") we have to use "j+1"
+			 * more often than "j".
+			 *
 			 */
 
 
