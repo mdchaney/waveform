@@ -372,7 +372,17 @@ int main(int argc, char **argv) {
 			 * drawing.  Let's assume a line in the first octant (in polar
 			 * coordinates the angle is 0-45 degrees) where "x" is the
 			 * actual sample_count and "y" is the "points" variable.  We
-			 * assume then that "sample_count > points". */
+			 * assume then that "sample_count > points".
+			 *
+			 * In standard Bresenham talk that means that "sample_count" is
+			 * "dx" and "points" is "dy".  Using integer division the
+			 * number of samples per point will vary between two numbers,
+			 * say "j" and "j+1".  When to use "j" and when to use "j+1" is
+			 * the trick.
+			 *
+			 */
+
+
 
 		} else if (strncmp(chunk_header.chunk_type, "COMM", 4) == 0) {
 			fprintf(stderr, "Found COMM chunk with length %d\n", chunk_length);
