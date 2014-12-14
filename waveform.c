@@ -27,7 +27,7 @@
 #include <string.h>
 #include <getopt.h>
 
-static int verbose_flag;
+static int verbose_flag, debug_flag;
 static unsigned long points;
 static int use_mean;
 static int use_rms;
@@ -64,15 +64,16 @@ int main(int argc, char **argv) {
 	while (1) {
 		static struct option long_options[] = {
 			{ "verbose", no_argument, &verbose_flag, 1 },
+			{ "debug", no_argument, &debug_flag, 1 },
 			{ "mean", no_argument, &use_mean, 1 },
 			{ "rms", no_argument, &use_rms, 1 },
-			{ "points", required_argument, 0, 'p' },
+			{ "points", required_argument, 0, 1 },
 			{ 0, 0, 0, 0 }
 		};
 
 		int option_index = 0;
 
-		c = getopt_long(argc, argv, "p", long_options, &option_index);
+		c = getopt_long(argc, argv, "", long_options, &option_index);
 
 		if (c == -1) break;
 
@@ -462,14 +463,14 @@ int main(int argc, char **argv) {
 
 			}
 
-			samples_left = sample_count;
-
-			for (i=0 ; i<points; i++) {
-				fprintf(stderr, "%5d:   %10d   %10d\n", i, sample_group_sizes[i], samples_left);
-				samples_left -= sample_group_sizes[i];
+			if (debug) {
+				samples_left = sample_count;
+				for (i=0 ; i<points; i++) {
+					fprintf(stderr, "%5d:   %10d   %10d\n", i, sample_group_sizes[i], samples_left);
+					samples_left -= sample_group_sizes[i];
+				}
+				fprintf(stderr, "%5d:                %10d\n", i, samples_left);
 			}
-
-			fprintf(stderr, "%5d:                %10d\n", i, samples_left);
 
 		} else if (strncmp(chunk_header.chunk_type, "COMM", 4) == 0) {
 			fprintf(stderr, "Found COMM chunk with length %d\n", chunk_length);
