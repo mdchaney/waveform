@@ -26,8 +26,9 @@
 #include <stdint.h>
 #include <string.h>
 #include <getopt.h>
+#include <math.h>
 
-static int verbose_flag, debug_flag;
+static int verbose_flag, debug_flag, mono_flag;
 static unsigned long points;
 static int use_mean;
 static int use_rms;
@@ -65,9 +66,10 @@ int main(int argc, char **argv) {
 		static struct option long_options[] = {
 			{ "verbose", no_argument, &verbose_flag, 1 },
 			{ "debug", no_argument, &debug_flag, 1 },
+			{ "mono", no_argument, &mono_flag, 1 },
 			{ "mean", no_argument, &use_mean, 1 },
 			{ "rms", no_argument, &use_rms, 1 },
-			{ "points", required_argument, 0, 1 },
+			{ "points", required_argument, 0, 'p' },
 			{ 0, 0, 0, 0 }
 		};
 
@@ -85,7 +87,7 @@ int main(int argc, char **argv) {
 			case 'p':
 				/* parse optarg to get # */
 				if (sscanf(optarg, "%lu", &points) != 1) {
-					printf("Expecting number for 'points', got `%s'\n", optarg);
+					fprintf(stderr, "Expecting number for 'points', got `%s'\n", optarg);
 					exit(1);
 				}
 				break;
@@ -101,19 +103,19 @@ int main(int argc, char **argv) {
 	if (!use_mean && !use_rms) use_rms = 1;
 
 	if (verbose_flag) {
-		printf("verbose!\n");
+		fprintf(stderr, "verbose!\n");
 	}
 
 	if (points) {
-		printf("points: %lu\n", points);
+		fprintf(stderr, "points: %lu\n", points);
 	}
 
 	if (use_mean) {
-		printf("using mean\n");
+		fprintf(stderr, "using mean\n");
 	} else if (use_rms) {
-		printf("using rms\n");
+		fprintf(stderr, "using rms\n");
 	} else {
-		printf("confused about algorithm\n");
+		fprintf(stderr, "confused about algorithm\n");
 	}
 
 	char* filename;
@@ -125,25 +127,25 @@ int main(int argc, char **argv) {
 	}
 
 	if (filename) {
-		printf("Filename: %s\n", filename);
+		fprintf(stderr, "Filename: %s\n", filename);
 	}
 
 	if (!filename) {
-		printf("Reading stdin\n");
+		fprintf(stderr, "Reading stdin\n");
 	}
 
 	if (filename) {
 		if (!freopen(filename, "r", stdin)) {
-			printf("Cannot open `%s' for reading\n", filename);
+			fprintf(stderr, "Cannot open `%s' for reading\n", filename);
 			exit(1);
 		}
 	}
 
 	Endianness_t machine_endianness, file_endianness, data_endianness;
 
-	uint32_t i=0x01234567;
+	uint32_t checker=0x01234567;
 
-	switch (*((uint8_t*)(&i))) {
+	switch (*((uint8_t*)(&checker))) {
 		case 0x01:
 			machine_endianness = BIG;
 			break;
@@ -155,14 +157,14 @@ int main(int argc, char **argv) {
 			break;
 	}
 
-	printf("Your architecture is ");
+	fprintf(stderr, "Your architecture is ");
 
 	if (machine_endianness == BIG) {
-		printf("big endian\n");
+		fprintf(stderr, "big endian\n");
 	} else if (machine_endianness == LITTLE) {
-		printf("little endian\n");
+		fprintf(stderr, "little endian\n");
 	} else if (machine_endianness == MIXED) {
-		printf("mixed endian\n");
+		fprintf(stderr, "mixed endian\n");
 	}
 
 	size_t items_read;
@@ -180,12 +182,12 @@ int main(int argc, char **argv) {
 	items_read = fread(&riff_header, sizeof(riff_header_struct), 1, stdin);
 
 	if (items_read != 1) {
-		printf("Header unreadable\n");
+		fprintf(stderr, "Header unreadable\n");
 		exit(1);
 	}
 
 	if (strncmp(riff_header.RIFF, "RIFF", 4) != 0 && strncmp(riff_header.RIFF, "FORM", 4) != 0) {
-		printf("No RIFF/FORM header\n");
+		fprintf(stderr, "No RIFF/FORM header\n");
 		exit(1);
 	}
 
@@ -199,28 +201,28 @@ int main(int argc, char **argv) {
 	}
 
 	if (file_format == FORM_FILE) {
-		printf("FORM file format\n");
+		fprintf(stderr, "FORM file format\n");
 		file_endianness = BIG;
 	} else if (file_format == RIFF_FILE) {
-		printf("RIFF file format\n");
+		fprintf(stderr, "RIFF file format\n");
 		file_endianness = LITTLE;
 	} else {
-		printf("Confusion in file format\n");
+		fprintf(stderr, "Confusion in file format\n");
 		exit(1);
 	}
 
-	printf("Your file is ");
+	fprintf(stderr, "Your file is ");
 
 	if (file_endianness == BIG) {
-		printf("big endian\n");
+		fprintf(stderr, "big endian\n");
 	} else if (file_endianness == LITTLE) {
-		printf("little endian\n");
+		fprintf(stderr, "little endian\n");
 	}
 
 	if (file_endianness != machine_endianness) {
-		printf("File size (sans RIFF/FORM header): %d\n", swap_int32(riff_header.file_size_sans_riff_header));
+		fprintf(stderr, "File size (sans RIFF/FORM header): %d\n", swap_int32(riff_header.file_size_sans_riff_header));
 	} else {
-		printf("File size (sans RIFF/FORM header): %d\n", riff_header.file_size_sans_riff_header);
+		fprintf(stderr, "File size (sans RIFF/FORM header): %d\n", riff_header.file_size_sans_riff_header);
 	}
 
 	/* Now, we need to see what kind of file it is.  It's a RIFF if it
@@ -232,7 +234,7 @@ int main(int argc, char **argv) {
 
 	AudioFormat_t audio_format;
 
-	printf("File type: %c%c%c%c\n", audio_type[0], audio_type[1], audio_type[2], audio_type[3]);
+	fprintf(stderr, "File type: %c%c%c%c\n", audio_type[0], audio_type[1], audio_type[2], audio_type[3]);
 
 	if (strncmp(audio_type, "WAVE", 4) == 0) {
 		audio_format = WAVE_FILE;
@@ -326,7 +328,7 @@ int main(int argc, char **argv) {
 				int32_t byte_rate;
 				int16_t block_align;
 				int16_t bits_per_sample;
-				char    padding[20]; /* sometimes the chunk is longer */
+				char    padding[30]; /* sometimes the chunk is longer */
 			} fmt_chunk;
 
 			if (chunk_length > sizeof(fmt_chunk)) {
@@ -376,8 +378,10 @@ int main(int argc, char **argv) {
 			 * In standard Bresenham talk that means that "sample_count" is
 			 * "dx" and "points" is "dy".  Using integer division the
 			 * number of samples per point will vary between two numbers,
-			 * say "j" and "j+1".  When to use "j" and when to use "j+1" is
-			 * the trick.
+			 * say "lower_points_per_sample" and
+			 * "lower_points_per_sample+1".  When to use
+			 * "lower_points_per_sample" and when to use
+			 * "lower_points_per_sample+1" is the trick.
 			 *
 			 * Let's say there are 9000 samples and we want 1000 points.
 			 * In that case each point will be computed from 9 samples.
@@ -397,47 +401,53 @@ int main(int argc, char **argv) {
 			 *
 			 * Here's where it gets weird.  We can actually again employ
 			 * Bresenham's algorithm to determine the interval at which we
-			 * use "j" samples and when we use "j+1".  As the "slope"
-			 * exceeds 45 degrees (at "points / 2") we have to use "j+1"
-			 * more often than "j".
+			 * use "lower_points_per_sample" samples and when we use
+			 * "lower_points_per_sample+1".  As the "slope" exceeds 45
+			 * degrees (at "points / 2") we have to use
+			 * "lower_points_per_sample+1" more often than
+			 * "lower_points_per_sample".
 			 *
 			 * Take the first case, where samples is between 9000 and 9499.
 			 * Generalized (with integer arithmetic):
 			 *
-			 * j = samples / points
-			 * leftover = samples - (j * points)
+			 * lower_points_per_sample = samples / points leftover =
+			 * samples - (lower_points_per_sample * points)
 			 *
 			 * At this point with the example numbers above "samples" is
 			 * "1000" * and "leftover" is the last column.  For our example
 			 * we examine numbers where "leftover / points < 0.5" for
-			 * simplicity.  In that case we need to stick between 0 and 499 
-			 * "j+1" sample groups in with the other samples.  So every so
-			 * often we have to grab "j+1" instead of "j".
+			 * simplicity.  In that case we need to stick between 0 and 499
+			 * "lower_points_per_sample+1" sample groups in with the other
+			 * samples.  So every so often we have to grab
+			 * "lower_points_per_sample+1" instead of
+			 * "lower_points_per_sample".
 			 *
 			 */
 
-			long j = sample_count / points;
-			long leftover = sample_count - (j * points);
+			long lower_points_per_sample = sample_count / points;
+			long leftover = sample_count - (lower_points_per_sample * points);
 
-			fprintf(stderr, "j: %ld, leftover: %ld\n", j, leftover);
+			fprintf(stderr, "lower_points_per_sample: %ld, leftover: %ld\n", lower_points_per_sample, leftover);
 
 			long samples_left = sample_count;
-			int sample_group_sizes[10000];
+			int *sample_group_sizes;
 
-			int i = 0, jump_at, jump_counter = 0;
+			sample_group_sizes = (int *) malloc(sizeof(int) * (points+1));
+
+			int i = 0, j = 0, k = 0, jump_at, jump_counter = 0;
 			int under_45=1;
 
 			if (leftover > points / 2) {
 				under_45 = 0;
 				jump_at = points / (points - leftover);
 
-				while (samples_left > 0) {
+				while (samples_left > 0 && i < points) {
 					if (jump_counter < jump_at) {
-						samples_left -= j+1;
-						sample_group_sizes[i] = j+1;
+						samples_left -= lower_points_per_sample+1;
+						sample_group_sizes[i] = lower_points_per_sample+1;
 					} else {
-						samples_left -= j;
-						sample_group_sizes[i] = j;
+						samples_left -= lower_points_per_sample;
+						sample_group_sizes[i] = lower_points_per_sample;
 						jump_counter = 0;
 					}
 					i++;
@@ -448,13 +458,13 @@ int main(int argc, char **argv) {
 				under_45 = 1;
 				jump_at = points / (leftover + 1);
 
-				while (samples_left > 0) {
+				while (samples_left > 0 && i < points) {
 					if (jump_counter < jump_at) {
-						samples_left -= j;
-						sample_group_sizes[i] = j;
+						samples_left -= lower_points_per_sample;
+						sample_group_sizes[i] = lower_points_per_sample;
 					} else {
-						samples_left -= j+1;
-						sample_group_sizes[i] = j+1;
+						samples_left -= lower_points_per_sample+1;
+						sample_group_sizes[i] = lower_points_per_sample+1;
 						jump_counter = 0;
 					}
 					i++;
@@ -463,15 +473,70 @@ int main(int argc, char **argv) {
 
 			}
 
-			if (debug) {
+			if (debug_flag) {
 				samples_left = sample_count;
 				for (i=0 ; i<points; i++) {
-					fprintf(stderr, "%5d:   %10d   %10d\n", i, sample_group_sizes[i], samples_left);
+					fprintf(stderr, "%5d:   %10d   %10ld\n", i, sample_group_sizes[i], samples_left);
 					samples_left -= sample_group_sizes[i];
 				}
-				fprintf(stderr, "%5d:                %10d\n", i, samples_left);
+				fprintf(stderr, "%5d:                %10ld\n", i, samples_left);
 			}
 
+			if (channel_count == 2 && bits_per_sample == 16) {
+				int16_t *samples, *sample_pointer;
+				samples = (int16_t *) malloc(2 * 2 * (lower_points_per_sample+1));  /* 2 channels, 2 byte samples */
+
+				for (i=0 ; i<points; i++) {
+					int points_to_read = sample_group_sizes[i];
+					items_read = fread(samples, 4, points_to_read, stdin);
+					if (items_read != points_to_read) {
+						if (feof(stdin)) {
+							fprintf(stderr, "Unexpected EOF\n");
+							exit(1);
+						} else {
+	      				fprintf(stderr, "Chunk unreadable\n");
+		      			exit(1);
+		   			}
+					}
+
+					int64_t sum_of_squares_0=0, sum_of_squares_1=0;
+					double rms_0, rms_1;
+
+					if (mono_flag) {
+						sample_pointer = samples;
+						for (j=0 ; j<points_to_read*2 ; j++) {
+							sum_of_squares_0 += (int64_t) *sample_pointer * (int64_t) *sample_pointer;
+							sample_pointer++;
+						}
+						/* At this point we have the sums of the squares of
+						 * the sample group.  We'll do our floating point math
+						 * here to get the square root. */
+						rms_0 = sqrt((double)sum_of_squares_0 / ((double)points_to_read * 2.0)) / 16384.0 * 256.0;
+
+						printf("%u\n", (int)floor(rms_0));
+					} else {
+						sample_pointer = samples;
+						for (j=0 ; j<points_to_read ; j++) {
+							sum_of_squares_0 += (int64_t) *sample_pointer * (int64_t) *sample_pointer;
+							sample_pointer++;
+							sum_of_squares_1 += (int64_t) *sample_pointer * (int64_t) *sample_pointer;
+							sample_pointer++;
+						}
+						/* At this point we have the sums of the squares of
+						 * the sample group.  We'll do our floating point math
+						 * here to get the square root. */
+						rms_0 = sqrt((double)sum_of_squares_0 / (double)points_to_read);
+						rms_1 = sqrt((double)sum_of_squares_1 / (double)points_to_read);
+
+						printf("%u,%u\n", (int)floor(rms_0), (int)floor(rms_1));
+					}
+				}
+
+				free(samples);
+				free(sample_group_sizes);
+
+			}
+			
 		} else if (strncmp(chunk_header.chunk_type, "COMM", 4) == 0) {
 			fprintf(stderr, "Found COMM chunk with length %d\n", chunk_length);
 		} else if (strncmp(chunk_header.chunk_type, "SSND", 4) == 0) {
