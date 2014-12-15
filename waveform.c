@@ -472,14 +472,20 @@ int waveform_2_channel_16_bit_diff_endianness_mean(int16_t *samples, int sample_
 }
 
 int waveform_1_channel_8_bit(FILE *fd, int *sample_group_sizes, Algo_t algorithm, Endianness_t machine_endianness, Endianness_t data_endianness) {
+	printf("Single channel 8 bit not implemented\n");
+	abort();
 	return 0;
 }
 
 int waveform_1_channel_16_bit(FILE *fd, int *sample_group_sizes, Algo_t algorithm, Endianness_t machine_endianness, Endianness_t data_endianness) {
+	printf("Single channel 16 bit not implemented\n");
+	abort();
 	return 0;
 }
 
 int waveform_2_channel_8_bit(FILE *fd, int *sample_group_sizes, Algo_t algorithm, Endianness_t machine_endianness, Endianness_t data_endianness) {
+	printf("Dual channel 8 bit not implemented\n");
+	abort();
 	return 0;
 }
 
