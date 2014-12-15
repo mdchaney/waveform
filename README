@@ -1,0 +1,42 @@
+waveform
+
+Copyright 2014 Michael Chaney Consulting Corporation, all rights reserved
+
+Released under the terms of the MIT or GPLv2 license.
+
+This is a simple C program that will create a "wave form" of an AIFF or
+WAVE file.  It is optimized for speed in probably the best way possible
+on a modern CPU architecture: minimum of branching inside of loops.
+That means that I have entire chunks of code copied verbatim except for
+a few different lines of code to handle the dirty work of computing the
+numbers.
+
+The program is called like this:
+
+waveform [--mean|--peak|--rms] [--mono] [--points x] [--scale y] [filename]
+
+The program will output a set of integers (number specified by "points
+parameter, default of 1000), one or two on each line (comma
+separated for two numbers) that vary from "0" to "scale" (defaults to
+"255").  The numbers represent the result of a set of sample points run
+through an algorithm.
+
+Let's say we have a WAVE file that is 3 minutes long at CD quality of
+44100 samples per second.  There are 7,938,000 samples in the file.  At
+1000 points there would be 7938 samples interpolated for each output
+point.
+
+1. "mean", "peak", and "rms" are three interpolation algorithms.  Choose
+one, default is rms.
+
+2. --mono will cause a 2 channel file to output only a single integer
+per line representing an interpolation of both channels.
+
+3. --points tells how many numbers to output
+
+4. --scale will determine the scale of the output integers.  Note that
+it is inclusive, so a scale of "255" will possibly include output
+integers from "0" to "255" inclusive.
+
+5. waveform accepts either a filename on the command line or it'll read
+stdin.  It can be used as a pipe filter.
