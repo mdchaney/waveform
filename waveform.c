@@ -969,6 +969,8 @@ int main(int argc, char **argv) {
 				uint32_t ssnd_offset, ssnd_blocksize;
 			} comm_subheader;
 
+			uint32_t ssnd_offset, ssnd_blocksize;
+
 			items_read = fread(&comm_subheader, sizeof(comm_subheader), 1, stdin);
 
 			if (items_read != 1) {
@@ -976,9 +978,16 @@ int main(int argc, char **argv) {
 				exit(1);
 			}
 
+			ssnd_offset = (machine_endianness != file_endianness ? swap_uint32(comm_subheader.ssnd_offset) : comm_subheader.ssnd_offset);
+			ssnd_blocksize = (machine_endianness != file_endianness ? swap_uint32(comm_subheader.ssnd_blocksize) : comm_subheader.ssnd_blocksize);
+
+			if (debug_flag) {
+				fprintf(stderr, "ssnd offset: %d, ssnd blocksize: %d\n", ssnd_offset, ssnd_blocksize);
+			}
+
 			/* if there's an offset we'll skip that many bytes */
-			if (comm_subheader.ssnd_offset > 0) {
-				fseek(stdin, comm_subheader.ssnd_offset, SEEK_CUR);
+			if (ssnd_offset > 0) {
+				fseek(stdin, ssnd_offset, SEEK_CUR);
 			}
 
 			calculate_waveform(stdin, sample_count, channel_count, bits_per_sample, algorithm, machine_endianness, data_endianness);
