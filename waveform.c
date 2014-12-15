@@ -62,7 +62,210 @@ static inline int32_t swap_int32(int32_t val) {
 	return (val << 16) | ((val >> 16) & 0xFFFF);
 }
 
+/* Here's where we implement Bresenham's algorithm for line
+ * drawing.  Let's assume a line in the first octant (in polar
+ * coordinates the angle is 0-45 degrees) where "x" is the
+ * actual sample_count and "y" is the "points" variable.  We
+ * assume then that "sample_count > points".
+ *
+ * In standard Bresenham talk that means that "sample_count" is
+ * "dx" and "points" is "dy".  Using integer division the
+ * number of samples per point will vary between two numbers,
+ * say "lower_points_per_sample" and
+ * "lower_points_per_sample+1".  When to use
+ * "lower_points_per_sample" and when to use
+ * "lower_points_per_sample+1" is the trick.
+ *
+ * Let's say there are 9000 samples and we want 1000 points.
+ * In that case each point will be computed from 9 samples.
+ *
+ * If we add 1 sample then we're at 9001 samples.  In that case
+ * we will need 999 groups of 9 samples and one group of 10
+ * samples.  If we have 9005 samples then it'll be 995 groups
+ * of 9 samples and 5 groups of 10 samples.
+ *
+ *    Samples            9 samples/group    10 samples/group
+ *       9000                  1000                   0
+ *       9001                   999                   1
+ *       9005                   995                   5
+ *       9499                   501                 499
+ *       9500                   500                 500
+ *       9999                     1                 999
+ *
+ * Here's where it gets weird.  We can actually again employ
+ * Bresenham's algorithm to determine the interval at which we
+ * use "lower_points_per_sample" samples and when we use
+ * "lower_points_per_sample+1".  As the "slope" exceeds 45
+ * degrees (at "points / 2") we have to use
+ * "lower_points_per_sample+1" more often than
+ * "lower_points_per_sample".
+ *
+ * Take the first case, where samples is between 9000 and 9499.
+ * Generalized (with integer arithmetic):
+ *
+ * lower_points_per_sample = samples / points leftover =
+ * samples - (lower_points_per_sample * points)
+ *
+ * At this point with the example numbers above "samples" is
+ * "1000" * and "leftover" is the last column.  For our example
+ * we examine numbers where "leftover / points < 0.5" for
+ * simplicity.  In that case we need to stick between 0 and 499
+ * "lower_points_per_sample+1" sample groups in with the other
+ * samples.  So every so often we have to grab
+ * "lower_points_per_sample+1" instead of
+ * "lower_points_per_sample".
+ *
+ */
+
+int* get_sample_group_sizes(int sample_count, int points) {
+
+	long lower_points_per_sample = sample_count / points;
+	long leftover = sample_count - (lower_points_per_sample * points);
+
+	fprintf(stderr, "lower_points_per_sample: %ld, leftover: %ld\n", lower_points_per_sample, leftover);
+
+	long samples_left = sample_count;
+	int *sample_group_sizes;
+
+	sample_group_sizes = (int *) malloc(sizeof(int) * (points+1));
+
+	int i = 0, j = 0, k = 0, jump_at, jump_counter = 0;
+	int under_45=1;
+
+	if (leftover > points / 2) {
+		under_45 = 0;
+		jump_at = points / (points - leftover);
+
+		while (samples_left > 0 && i < points) {
+			if (jump_counter < jump_at) {
+				samples_left -= lower_points_per_sample+1;
+				sample_group_sizes[i] = lower_points_per_sample+1;
+			} else {
+				samples_left -= lower_points_per_sample;
+				sample_group_sizes[i] = lower_points_per_sample;
+				jump_counter = 0;
+			}
+			i++;
+			jump_counter++;
+		}
+
+	} else {
+		under_45 = 1;
+		jump_at = points / (leftover + 1);
+
+		while (samples_left > 0 && i < points) {
+			if (jump_counter < jump_at) {
+				samples_left -= lower_points_per_sample;
+				sample_group_sizes[i] = lower_points_per_sample;
+			} else {
+				samples_left -= lower_points_per_sample+1;
+				sample_group_sizes[i] = lower_points_per_sample+1;
+				jump_counter = 0;
+			}
+			i++;
+			jump_counter++;
+		}
+
+	}
+
+	if (debug_flag) {
+		samples_left = sample_count;
+		for (i=0 ; i<points; i++) {
+			fprintf(stderr, "%5d:   %10d   %10ld\n", i, sample_group_sizes[i], samples_left);
+			samples_left -= sample_group_sizes[i];
+		}
+		fprintf(stderr, "%5d:                %10ld\n", i, samples_left);
+	}
+
+	return(sample_group_sizes);
+}
+
+int waveform_2_channel_16_bit_same_endianness_rms(FILE *fd, int *sample_group_sizes) {
+
+	/* this code is where:
+	 * machine_endianness == data_endianness
+	 * channel_count == 2
+	 * bits_per_sample == 16
+	 * algorithm == RMS
+	 */
+
+	int i, j, items_read;
+	int16_t *samples, *sample_pointer;
+	samples = (int16_t *) malloc(2 * 2 * (sample_group_sizes[0]+1));  /* 2 channels, 2 byte samples */
+
+	for (i=0 ; i<points; i++) {
+
+		int points_to_read = sample_group_sizes[i];
+
+		items_read = fread(samples, 4, points_to_read, fd);
+
+		if (items_read != points_to_read) {
+			if (feof(fd)) {
+				fprintf(stderr, "Unexpected EOF\n");
+				exit(1);
+			} else {
+      				fprintf(stderr, "Chunk unreadable\n");
+      			exit(1);
+   			}
+		}
+
+		int64_t sum_of_squares_0=0, sum_of_squares_1=0;
+		double rms_0, rms_1;
+
+		if (mono_flag) {
+			sample_pointer = samples;
+			for (j=0 ; j<points_to_read*2 ; j++) {
+				int64_t sample_point = *sample_pointer;
+				sum_of_squares_0 += (sample_point * sample_point);
+				sample_pointer++;
+			}
+			/* At this point we have the sums of the squares of
+			 * the sample group.  We'll do our floating point math
+			 * here to get the square root. */
+			rms_0 = sqrt((double)sum_of_squares_0 / ((double)points_to_read * 2.0));
+
+			printf("%u\n", (int)floor(rms_0 * scale / 32768.0));
+		} else {
+			sample_pointer = samples;
+			for (j=0 ; j<points_to_read ; j++) {
+				int64_t sample_point = *sample_pointer;
+				sum_of_squares_0 += (sample_point * sample_point);
+				sample_pointer++;
+				sample_point = *sample_pointer;
+				sum_of_squares_1 += (sample_point * sample_point);
+				sample_pointer++;
+			}
+			/* At this point we have the sums of the squares of
+			 * the sample group.  We'll do our floating point math
+			 * here to get the square root. */
+			rms_0 = sqrt((double)sum_of_squares_0 / (double)points_to_read);
+			rms_1 = sqrt((double)sum_of_squares_1 / (double)points_to_read);
+
+			printf("%u,%u\n", (int)floor(rms_0 * scale / 32768.0), (int)floor(rms_1 * scale / 32768.0));
+		}
+	}
+
+	free(samples);
+
+	return(1);
+}
+
+/* dispatcher */
+int calculate_waveform(FILE *fd, int *sample_group_sizes, int channel_count, int bits_per_sample, Algo_t algorithm, Endianness_t machine_endianness, Endianness_t data_endianness) {
+
+	if (channel_count == 2 && bits_per_sample == 16 && machine_endianness == data_endianness && algorithm == RMS) {
+
+		return waveform_2_channel_16_bit_same_endianness_rms(fd, sample_group_sizes);
+
+	}
+
+	return(0);
+
+}
+
 int main(int argc, char **argv) {
+	int i = 0, j = 0, k = 0; /* for use in loops */
+
 	int c;
 
 	while (1) {
@@ -394,187 +597,12 @@ int main(int argc, char **argv) {
 
 			fprintf(stderr, "Sample Count: %d\n", sample_count);
 
-			/* Here's where we implement Bresenham's algorithm for line
-			 * drawing.  Let's assume a line in the first octant (in polar
-			 * coordinates the angle is 0-45 degrees) where "x" is the
-			 * actual sample_count and "y" is the "points" variable.  We
-			 * assume then that "sample_count > points".
-			 *
-			 * In standard Bresenham talk that means that "sample_count" is
-			 * "dx" and "points" is "dy".  Using integer division the
-			 * number of samples per point will vary between two numbers,
-			 * say "lower_points_per_sample" and
-			 * "lower_points_per_sample+1".  When to use
-			 * "lower_points_per_sample" and when to use
-			 * "lower_points_per_sample+1" is the trick.
-			 *
-			 * Let's say there are 9000 samples and we want 1000 points.
-			 * In that case each point will be computed from 9 samples.
-			 *
-			 * If we add 1 sample then we're at 9001 samples.  In that case
-			 * we will need 999 groups of 9 samples and one group of 10
-			 * samples.  If we have 9005 samples then it'll be 995 groups
-			 * of 9 samples and 5 groups of 10 samples.
-			 *
-			 *    Samples            9 samples/group    10 samples/group
-			 *       9000                  1000                   0
-			 *       9001                   999                   1
-			 *       9005                   995                   5
-			 *       9499                   501                 499
-			 *       9500                   500                 500
-			 *       9999                     1                 999
-			 *
-			 * Here's where it gets weird.  We can actually again employ
-			 * Bresenham's algorithm to determine the interval at which we
-			 * use "lower_points_per_sample" samples and when we use
-			 * "lower_points_per_sample+1".  As the "slope" exceeds 45
-			 * degrees (at "points / 2") we have to use
-			 * "lower_points_per_sample+1" more often than
-			 * "lower_points_per_sample".
-			 *
-			 * Take the first case, where samples is between 9000 and 9499.
-			 * Generalized (with integer arithmetic):
-			 *
-			 * lower_points_per_sample = samples / points leftover =
-			 * samples - (lower_points_per_sample * points)
-			 *
-			 * At this point with the example numbers above "samples" is
-			 * "1000" * and "leftover" is the last column.  For our example
-			 * we examine numbers where "leftover / points < 0.5" for
-			 * simplicity.  In that case we need to stick between 0 and 499
-			 * "lower_points_per_sample+1" sample groups in with the other
-			 * samples.  So every so often we have to grab
-			 * "lower_points_per_sample+1" instead of
-			 * "lower_points_per_sample".
-			 *
-			 */
+			int* sample_group_sizes = get_sample_group_sizes(sample_count, points);
 
-			long lower_points_per_sample = sample_count / points;
-			long leftover = sample_count - (lower_points_per_sample * points);
+			calculate_waveform(stdin, sample_group_sizes, channel_count, bits_per_sample, algorithm, machine_endianness, data_endianness);
 
-			fprintf(stderr, "lower_points_per_sample: %ld, leftover: %ld\n", lower_points_per_sample, leftover);
+			free(sample_group_sizes);
 
-			long samples_left = sample_count;
-			int *sample_group_sizes;
-
-			sample_group_sizes = (int *) malloc(sizeof(int) * (points+1));
-
-			int i = 0, j = 0, k = 0, jump_at, jump_counter = 0;
-			int under_45=1;
-
-			if (leftover > points / 2) {
-				under_45 = 0;
-				jump_at = points / (points - leftover);
-
-				while (samples_left > 0 && i < points) {
-					if (jump_counter < jump_at) {
-						samples_left -= lower_points_per_sample+1;
-						sample_group_sizes[i] = lower_points_per_sample+1;
-					} else {
-						samples_left -= lower_points_per_sample;
-						sample_group_sizes[i] = lower_points_per_sample;
-						jump_counter = 0;
-					}
-					i++;
-					jump_counter++;
-				}
-
-			} else {
-				under_45 = 1;
-				jump_at = points / (leftover + 1);
-
-				while (samples_left > 0 && i < points) {
-					if (jump_counter < jump_at) {
-						samples_left -= lower_points_per_sample;
-						sample_group_sizes[i] = lower_points_per_sample;
-					} else {
-						samples_left -= lower_points_per_sample+1;
-						sample_group_sizes[i] = lower_points_per_sample+1;
-						jump_counter = 0;
-					}
-					i++;
-					jump_counter++;
-				}
-
-			}
-
-			if (debug_flag) {
-				samples_left = sample_count;
-				for (i=0 ; i<points; i++) {
-					fprintf(stderr, "%5d:   %10d   %10ld\n", i, sample_group_sizes[i], samples_left);
-					samples_left -= sample_group_sizes[i];
-				}
-				fprintf(stderr, "%5d:                %10ld\n", i, samples_left);
-			}
-
-			/* this code is where:
-			 * machine_endianness == data_endianness
-			 * channel_count == 2
-			 * bits_per_sample == 16
-			 * algorithm == RMS
-			 */
-
-			if (channel_count == 2 && bits_per_sample == 16) {
-
-				int16_t *samples, *sample_pointer;
-				samples = (int16_t *) malloc(2 * 2 * (lower_points_per_sample+1));  /* 2 channels, 2 byte samples */
-
-				for (i=0 ; i<points; i++) {
-
-					int points_to_read = sample_group_sizes[i];
-
-					items_read = fread(samples, 4, points_to_read, stdin);
-
-					if (items_read != points_to_read) {
-						if (feof(stdin)) {
-							fprintf(stderr, "Unexpected EOF\n");
-							exit(1);
-						} else {
-	      				fprintf(stderr, "Chunk unreadable\n");
-		      			exit(1);
-		   			}
-					}
-
-					int64_t sum_of_squares_0=0, sum_of_squares_1=0;
-					double rms_0, rms_1;
-
-					if (mono_flag) {
-						sample_pointer = samples;
-						for (j=0 ; j<points_to_read*2 ; j++) {
-							int64_t sample_point = *sample_pointer;
-							sum_of_squares_0 += (sample_point * sample_point);
-							sample_pointer++;
-						}
-						/* At this point we have the sums of the squares of
-						 * the sample group.  We'll do our floating point math
-						 * here to get the square root. */
-						rms_0 = sqrt((double)sum_of_squares_0 / ((double)points_to_read * 2.0));
-
-						printf("%u\n", (int)floor(rms_0 * scale / 32768.0));
-					} else {
-						sample_pointer = samples;
-						for (j=0 ; j<points_to_read ; j++) {
-							int64_t sample_point = *sample_pointer;
-							sum_of_squares_0 += (sample_point * sample_point);
-							sample_pointer++;
-							sample_point = *sample_pointer;
-							sum_of_squares_1 += (sample_point * sample_point);
-							sample_pointer++;
-						}
-						/* At this point we have the sums of the squares of
-						 * the sample group.  We'll do our floating point math
-						 * here to get the square root. */
-						rms_0 = sqrt((double)sum_of_squares_0 / (double)points_to_read);
-						rms_1 = sqrt((double)sum_of_squares_1 / (double)points_to_read);
-
-						printf("%u,%u\n", (int)floor(rms_0 * scale / 32768.0), (int)floor(rms_1 * scale / 32768.0));
-					}
-				}
-
-				free(samples);
-				free(sample_group_sizes);
-
-			}
 			
 		} else if (strncmp(chunk_header.chunk_type, "COMM", 4) == 0) {
 			fprintf(stderr, "Found COMM chunk with length %d\n", chunk_length);
