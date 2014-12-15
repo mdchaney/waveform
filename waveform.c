@@ -253,9 +253,107 @@ int waveform_2_channel_16_bit_same_endianness_rms(FILE *fd, int *sample_group_si
 /* dispatcher */
 int calculate_waveform(FILE *fd, int *sample_group_sizes, int channel_count, int bits_per_sample, Algo_t algorithm, Endianness_t machine_endianness, Endianness_t data_endianness) {
 
-	if (channel_count == 2 && bits_per_sample == 16 && machine_endianness == data_endianness && algorithm == RMS) {
+	if (channel_count == 1) {
 
-		return waveform_2_channel_16_bit_same_endianness_rms(fd, sample_group_sizes);
+		if (bits_per_sample == 8) {
+
+			if (machine_endianness == data_endianness) {
+
+				if (algorithm == RMS) {
+
+				} else if (algorithm == PEAK) {
+
+				} else if (algorithm == MEAN) {
+
+				}
+
+			} else  {
+
+				if (algorithm == RMS) {
+
+				} else if (algorithm == PEAK) {
+
+				} else if (algorithm == MEAN) {
+
+				}
+
+			}
+
+		} else if (bits_per_sample == 16) {
+
+			if (machine_endianness == data_endianness) {
+
+				if (algorithm == RMS) {
+
+				} else if (algorithm == PEAK) {
+
+				} else if (algorithm == MEAN) {
+
+				}
+
+			} else  {
+
+				if (algorithm == RMS) {
+
+				} else if (algorithm == PEAK) {
+
+				} else if (algorithm == MEAN) {
+
+				}
+
+			}
+		}
+
+	} else if (channel_count == 2) {
+
+		if (bits_per_sample == 8) {
+
+			if (machine_endianness == data_endianness) {
+
+				if (algorithm == RMS) {
+
+				} else if (algorithm == PEAK) {
+
+				} else if (algorithm == MEAN) {
+
+				}
+
+			} else  {
+
+				if (algorithm == RMS) {
+
+				} else if (algorithm == PEAK) {
+
+				} else if (algorithm == MEAN) {
+
+				}
+
+			}
+
+		} else if (bits_per_sample == 16) {
+
+			if (machine_endianness == data_endianness) {
+
+				if (algorithm == RMS) {
+					return waveform_2_channel_16_bit_same_endianness_rms(fd, sample_group_sizes);
+				} else if (algorithm == PEAK) {
+
+				} else if (algorithm == MEAN) {
+
+				}
+
+			} else  {
+
+				if (algorithm == RMS) {
+
+				} else if (algorithm == PEAK) {
+
+				} else if (algorithm == MEAN) {
+
+				}
+
+			}
+		}
 
 	}
 
