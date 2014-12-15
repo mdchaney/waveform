@@ -30,12 +30,15 @@
 
 static int verbose_flag, debug_flag, mono_flag;
 static unsigned long points;
+static double scale = 256;
+static int use_peak;
 static int use_mean;
 static int use_rms;
 
 typedef enum { BIG, LITTLE, MIXED } Endianness_t;
 typedef enum { RIFF_FILE, FORM_FILE } FileFormat_t;
 typedef enum { WAVE_FILE, AIFF_FILE, AIFC_FILE } AudioFormat_t;
+typedef enum { RMS, MEAN, PEAK } Algo_t;
 
 /* byte swap unsigned 16-bit int */
 static inline uint16_t swap_uint16(uint16_t val) {
@@ -67,9 +70,11 @@ int main(int argc, char **argv) {
 			{ "verbose", no_argument, &verbose_flag, 1 },
 			{ "debug", no_argument, &debug_flag, 1 },
 			{ "mono", no_argument, &mono_flag, 1 },
+			{ "peak", no_argument, &use_peak, 1 },
 			{ "mean", no_argument, &use_mean, 1 },
 			{ "rms", no_argument, &use_rms, 1 },
 			{ "points", required_argument, 0, 'p' },
+			{ "scale", required_argument, 0, 's' },
 			{ 0, 0, 0, 0 }
 		};
 
@@ -92,6 +97,14 @@ int main(int argc, char **argv) {
 				}
 				break;
 
+			case 's':
+				/* parse optarg to get # */
+				if (sscanf(optarg, "%lf", &scale) != 1) {
+					fprintf(stderr, "Expecting number for 'scale', got `%s'\n", optarg);
+					exit(1);
+				}
+				break;
+
 			case '?': /* error condition */
 				break;
 
@@ -100,7 +113,17 @@ int main(int argc, char **argv) {
 		}
 	}
 
-	if (!use_mean && !use_rms) use_rms = 1;
+	if (!use_peak && !use_mean && !use_rms) use_rms = 1;
+
+	Algo_t algorithm;
+
+	if (use_peak) {
+		algorithm = PEAK;
+	} else if (use_mean) {
+		algorithm = MEAN;
+	} else if (use_rms) {
+		algorithm = RMS;
+	}
 
 	if (verbose_flag) {
 		fprintf(stderr, "verbose!\n");
@@ -110,10 +133,12 @@ int main(int argc, char **argv) {
 		fprintf(stderr, "points: %lu\n", points);
 	}
 
-	if (use_mean) {
+	if (algorithm == MEAN) {
 		fprintf(stderr, "using mean\n");
-	} else if (use_rms) {
+	} else if (algorithm == RMS) {
 		fprintf(stderr, "using rms\n");
+	} else if (algorithm == PEAK) {
+		fprintf(stderr, "using peak\n");
 	} else {
 		fprintf(stderr, "confused about algorithm\n");
 	}
@@ -482,13 +507,24 @@ int main(int argc, char **argv) {
 				fprintf(stderr, "%5d:                %10ld\n", i, samples_left);
 			}
 
+			/* this code is where:
+			 * machine_endianness == data_endianness
+			 * channel_count == 2
+			 * bits_per_sample == 16
+			 * algorithm == RMS
+			 */
+
 			if (channel_count == 2 && bits_per_sample == 16) {
+
 				int16_t *samples, *sample_pointer;
 				samples = (int16_t *) malloc(2 * 2 * (lower_points_per_sample+1));  /* 2 channels, 2 byte samples */
 
 				for (i=0 ; i<points; i++) {
+
 					int points_to_read = sample_group_sizes[i];
+
 					items_read = fread(samples, 4, points_to_read, stdin);
+
 					if (items_read != points_to_read) {
 						if (feof(stdin)) {
 							fprintf(stderr, "Unexpected EOF\n");
@@ -505,21 +541,24 @@ int main(int argc, char **argv) {
 					if (mono_flag) {
 						sample_pointer = samples;
 						for (j=0 ; j<points_to_read*2 ; j++) {
-							sum_of_squares_0 += (int64_t) *sample_pointer * (int64_t) *sample_pointer;
+							int64_t sample_point = *sample_pointer;
+							sum_of_squares_0 += (sample_point * sample_point);
 							sample_pointer++;
 						}
 						/* At this point we have the sums of the squares of
 						 * the sample group.  We'll do our floating point math
 						 * here to get the square root. */
-						rms_0 = sqrt((double)sum_of_squares_0 / ((double)points_to_read * 2.0)) / 16384.0 * 256.0;
+						rms_0 = sqrt((double)sum_of_squares_0 / ((double)points_to_read * 2.0));
 
-						printf("%u\n", (int)floor(rms_0));
+						printf("%u\n", (int)floor(rms_0 * scale / 32768.0));
 					} else {
 						sample_pointer = samples;
 						for (j=0 ; j<points_to_read ; j++) {
-							sum_of_squares_0 += (int64_t) *sample_pointer * (int64_t) *sample_pointer;
+							int64_t sample_point = *sample_pointer;
+							sum_of_squares_0 += (sample_point * sample_point);
 							sample_pointer++;
-							sum_of_squares_1 += (int64_t) *sample_pointer * (int64_t) *sample_pointer;
+							sample_point = *sample_pointer;
+							sum_of_squares_1 += (sample_point * sample_point);
 							sample_pointer++;
 						}
 						/* At this point we have the sums of the squares of
@@ -528,7 +567,7 @@ int main(int argc, char **argv) {
 						rms_0 = sqrt((double)sum_of_squares_0 / (double)points_to_read);
 						rms_1 = sqrt((double)sum_of_squares_1 / (double)points_to_read);
 
-						printf("%u,%u\n", (int)floor(rms_0), (int)floor(rms_1));
+						printf("%u,%u\n", (int)floor(rms_0 * scale / 32768.0), (int)floor(rms_1 * scale / 32768.0));
 					}
 				}
 
