@@ -124,7 +124,7 @@ static inline int32_t swap_int32(int32_t val) {
 int* get_sample_group_sizes(int sample_count, int points) {
 
 	long lower_points_per_sample = sample_count / points;
-	long leftover = sample_count - (lower_points_per_sample * points);
+	long leftover = sample_count - (lower_points_per_sample * points) + 1;
 
 	if (debug_flag) fprintf(stderr, "lower_points_per_sample: %ld, leftover: %ld\n", lower_points_per_sample, leftover);
 
@@ -133,43 +133,21 @@ int* get_sample_group_sizes(int sample_count, int points) {
 
 	sample_group_sizes = (int *) malloc(sizeof(int) * (points+1));
 
-	int i = 0, j = 0, k = 0, jump_at, jump_counter = 0;
-	int under_45=1;
+	int i = 0, j = 0, k = 0, jump_counter;
 
-	if (leftover > points / 2) {
-		under_45 = 0;
-		jump_at = points / (points - leftover);
+	jump_counter = leftover - points;
 
-		while (samples_left > 0 && i < points) {
-			if (jump_counter < jump_at) {
-				samples_left -= lower_points_per_sample+1;
-				sample_group_sizes[i] = lower_points_per_sample+1;
-			} else {
-				samples_left -= lower_points_per_sample;
-				sample_group_sizes[i] = lower_points_per_sample;
-				jump_counter = 0;
-			}
-			i++;
-			jump_counter++;
+	while (samples_left > 0 && i < points) {
+		if (jump_counter > 0) {
+			samples_left -= lower_points_per_sample+1;
+			sample_group_sizes[i] = lower_points_per_sample+1;
+			jump_counter -= points;
+		} else {
+			samples_left -= lower_points_per_sample;
+			sample_group_sizes[i] = lower_points_per_sample;
 		}
-
-	} else {
-		under_45 = 1;
-		jump_at = points / (leftover + 1);
-
-		while (samples_left > 0 && i < points) {
-			if (jump_counter < jump_at) {
-				samples_left -= lower_points_per_sample;
-				sample_group_sizes[i] = lower_points_per_sample;
-			} else {
-				samples_left -= lower_points_per_sample+1;
-				sample_group_sizes[i] = lower_points_per_sample+1;
-				jump_counter = 0;
-			}
-			i++;
-			jump_counter++;
-		}
-
+		i++;
+		jump_counter += leftover;
 	}
 
 	if (debug_flag) {
