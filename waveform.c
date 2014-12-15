@@ -28,6 +28,10 @@
 #include <getopt.h>
 #include <math.h>
 
+/* My structures are representation of file data structures and must be
+ * used exactly as shown. */
+#pragma pack(1)
+
 static int verbose_flag, debug_flag, mono_flag;
 static unsigned long points;
 static double scale = 256;
@@ -925,9 +929,61 @@ int main(int argc, char **argv) {
 
 		} else if (strncmp(chunk_header.chunk_type, "COMM", 4) == 0) {
 			if (debug_flag) fprintf(stderr, "Found COMM chunk with length %d\n", chunk_length);
+
+			/* these are all big-endian */
+			struct {
+				int16_t channel_count;
+				int32_t sample_count;
+				int16_t bits_per_sample;
+				long double sample_rate;
+				char padding[30]; /* just in case */
+			} comm_chunk;
+
+			if (chunk_length > sizeof(comm_chunk)) {
+				fprintf(stderr, "comm chunk length is too long, got %d but expected %lu\n", chunk_length, sizeof(comm_chunk));
+				exit(1);
+			}
+
+			items_read = fread(&comm_chunk, chunk_length, 1, stdin);
+
+			if (items_read != 1) {
+				fprintf(stderr, "Unreadable comm chunk\n");
+				exit(1);
+			}
+
+			channel_count = (machine_endianness != file_endianness ? swap_int16(comm_chunk.channel_count) : comm_chunk.channel_count);
+			bits_per_sample = (machine_endianness != file_endianness ? swap_int16(comm_chunk.bits_per_sample) : comm_chunk.bits_per_sample);
+			sample_count = (machine_endianness != file_endianness ? swap_uint32(comm_chunk.sample_count) : comm_chunk.sample_count);
+
+			if (debug_flag) fprintf(stderr, "Channel Count: %d, Bits Per Sample: %d, Sample Count: %d\n",
+				channel_count, bits_per_sample, sample_count);
+
+			chunk_leftover = 0;
+
 		} else if (strncmp(chunk_header.chunk_type, "SSND", 4) == 0) {
 			if (debug_flag) fprintf(stderr, "Found SSND chunk with length %d\n", chunk_length);
 			we_are_done = 1;
+
+			/* The first 8 bytes are offset and blocksize */
+			struct {
+				uint32_t ssnd_offset, ssnd_blocksize;
+			} comm_subheader;
+
+			items_read = fread(&comm_subheader, sizeof(comm_subheader), 1, stdin);
+
+			if (items_read != 1) {
+				fprintf(stderr, "Unreadable comm chunk\n");
+				exit(1);
+			}
+
+			/* if there's an offset we'll skip that many bytes */
+			if (comm_subheader.ssnd_offset > 0) {
+				fseek(stdin, comm_subheader.ssnd_offset, SEEK_CUR);
+			}
+
+			calculate_waveform(stdin, sample_count, channel_count, bits_per_sample, algorithm, machine_endianness, data_endianness);
+
+			chunk_leftover = 0;
 		}
 
 		if (fseek(stdin, chunk_leftover, SEEK_CUR) != 0) {
