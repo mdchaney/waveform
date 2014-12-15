@@ -122,7 +122,7 @@ int* get_sample_group_sizes(int sample_count, int points) {
 	long lower_points_per_sample = sample_count / points;
 	long leftover = sample_count - (lower_points_per_sample * points);
 
-	fprintf(stderr, "lower_points_per_sample: %ld, leftover: %ld\n", lower_points_per_sample, leftover);
+	if (debug_flag) fprintf(stderr, "lower_points_per_sample: %ld, leftover: %ld\n", lower_points_per_sample, leftover);
 
 	long samples_left = sample_count;
 	int *sample_group_sizes;
@@ -197,9 +197,9 @@ int waveform_1_channel_16_bit_same_endianness_rms(FILE *fd, int *sample_group_si
 				fprintf(stderr, "Unexpected EOF\n");
 				exit(1);
 			} else {
-      				fprintf(stderr, "Chunk unreadable\n");
-      			exit(1);
-   			}
+				fprintf(stderr, "Chunk unreadable\n");
+				exit(1);
+			}
 		}
 
 		int64_t sum_of_squares_0=0;
@@ -224,7 +224,7 @@ int waveform_1_channel_16_bit_same_endianness_rms(FILE *fd, int *sample_group_si
 	return(1);
 }
 
-int waveform_2_channel_16_bit_same_endianness_rms(FILE *fd, int *sample_group_sizes) {
+int waveform_2_channel_16_bit_same_endianness_rms(int16_t *samples, int sample_group_size) {
 
 	/* this code is where:
 	 * machine_endianness == data_endianness
@@ -234,7 +234,79 @@ int waveform_2_channel_16_bit_same_endianness_rms(FILE *fd, int *sample_group_si
 	 */
 
 	int i, j, items_read;
-	int16_t *samples, *sample_pointer;
+
+	int16_t *sample_pointer = samples;
+
+	int64_t sum_of_squares_0=0, sum_of_squares_1=0;
+	double rms_0, rms_1;
+
+	if (mono_flag) {
+		for (j=0 ; j<sample_group_size*2 ; j++) {
+			int64_t sample_point = *sample_pointer;
+			sum_of_squares_0 += (sample_point * sample_point);
+			sample_pointer++;
+		}
+		/* At this point we have the sums of the squares of
+		 * the sample group.  We'll do our floating point math
+		 * here to get the square root. */
+		rms_0 = sqrt((double)sum_of_squares_0 / ((double)sample_group_size * 2.0));
+
+		printf("%u\n", (int)floor(rms_0 * scale / 32768.0));
+	} else {
+		for (j=0 ; j<sample_group_size ; j++) {
+			int64_t sample_point = *sample_pointer;
+			sum_of_squares_0 += (sample_point * sample_point);
+			sample_pointer++;
+			sample_point = *sample_pointer;
+			sum_of_squares_1 += (sample_point * sample_point);
+			sample_pointer++;
+		}
+		/* At this point we have the sums of the squares of
+		 * the sample group.  We'll do our floating point math
+		 * here to get the square root. */
+		rms_0 = sqrt((double)sum_of_squares_0 / (double)sample_group_size);
+		rms_1 = sqrt((double)sum_of_squares_1 / (double)sample_group_size);
+
+		printf("%u,%u\n", (int)floor(rms_0 * scale / 32768.0), (int)floor(rms_1 * scale / 32768.0));
+	}
+
+	return(1);
+}
+
+int waveform_1_channel_8_bit(FILE *fd, int *sample_group_sizes, Algo_t algorithm, Endianness_t machine_endianness, Endianness_t data_endianness) {
+	return 0;
+}
+
+int waveform_1_channel_16_bit(FILE *fd, int *sample_group_sizes, Algo_t algorithm, Endianness_t machine_endianness, Endianness_t data_endianness) {
+	return 0;
+}
+
+int waveform_2_channel_8_bit(FILE *fd, int *sample_group_sizes, Algo_t algorithm, Endianness_t machine_endianness, Endianness_t data_endianness) {
+	return 0;
+}
+
+int waveform_2_channel_16_bit(FILE *fd, int *sample_group_sizes, Algo_t algorithm, Endianness_t machine_endianness, Endianness_t data_endianness) {
+
+	int i, items_read;
+
+	int (*funcptr)(int16_t*, int);
+
+	if (machine_endianness == data_endianness) {
+		if (algorithm == RMS) {
+			funcptr = &waveform_2_channel_16_bit_same_endianness_rms;
+		} else if (algorithm == PEAK) {
+		} else if (algorithm == MEAN) {
+		}
+	} else {
+		/* different endianness */
+		if (algorithm == RMS) {
+			//funcptr = &waveform_2_channel_16_bit_diff_endianness_rms;
+		} else if (algorithm == PEAK) {
+		} else if (algorithm == MEAN) {
+		}
+	}
+
+	int16_t *samples;
 	samples = (int16_t *) malloc(2 * 2 * (sample_group_sizes[0]+1));  /* 2 channels, 2 byte samples */
 
 	for (i=0 ; i<points; i++) {
@@ -248,45 +320,12 @@ int waveform_2_channel_16_bit_same_endianness_rms(FILE *fd, int *sample_group_si
 				fprintf(stderr, "Unexpected EOF\n");
 				exit(1);
 			} else {
-      				fprintf(stderr, "Chunk unreadable\n");
-      			exit(1);
-   			}
+				fprintf(stderr, "Chunk unreadable\n");
+				exit(1);
+			}
 		}
 
-		int64_t sum_of_squares_0=0, sum_of_squares_1=0;
-		double rms_0, rms_1;
-
-		if (mono_flag) {
-			sample_pointer = samples;
-			for (j=0 ; j<points_to_read*2 ; j++) {
-				int64_t sample_point = *sample_pointer;
-				sum_of_squares_0 += (sample_point * sample_point);
-				sample_pointer++;
-			}
-			/* At this point we have the sums of the squares of
-			 * the sample group.  We'll do our floating point math
-			 * here to get the square root. */
-			rms_0 = sqrt((double)sum_of_squares_0 / ((double)points_to_read * 2.0));
-
-			printf("%u\n", (int)floor(rms_0 * scale / 32768.0));
-		} else {
-			sample_pointer = samples;
-			for (j=0 ; j<points_to_read ; j++) {
-				int64_t sample_point = *sample_pointer;
-				sum_of_squares_0 += (sample_point * sample_point);
-				sample_pointer++;
-				sample_point = *sample_pointer;
-				sum_of_squares_1 += (sample_point * sample_point);
-				sample_pointer++;
-			}
-			/* At this point we have the sums of the squares of
-			 * the sample group.  We'll do our floating point math
-			 * here to get the square root. */
-			rms_0 = sqrt((double)sum_of_squares_0 / (double)points_to_read);
-			rms_1 = sqrt((double)sum_of_squares_1 / (double)points_to_read);
-
-			printf("%u,%u\n", (int)floor(rms_0 * scale / 32768.0), (int)floor(rms_1 * scale / 32768.0));
-		}
+		(*funcptr)(samples, points_to_read);
 	}
 
 	free(samples);
@@ -294,117 +333,38 @@ int waveform_2_channel_16_bit_same_endianness_rms(FILE *fd, int *sample_group_si
 	return(1);
 }
 
+int waveform_1_channel(FILE *fd, int *sample_group_sizes, int bits_per_sample, Algo_t algorithm, Endianness_t machine_endianness, Endianness_t data_endianness) {
+	if (bits_per_sample == 8) {
+		waveform_1_channel_8_bit(fd, sample_group_sizes, algorithm, machine_endianness, data_endianness);
+	} else if (bits_per_sample == 16) {
+		waveform_1_channel_16_bit(fd, sample_group_sizes, algorithm, machine_endianness, data_endianness);
+	}
+	return 0;
+}
+
+int waveform_2_channel(FILE *fd, int *sample_group_sizes, int bits_per_sample, Algo_t algorithm, Endianness_t machine_endianness, Endianness_t data_endianness) {
+	if (bits_per_sample == 8) {
+		waveform_2_channel_8_bit(fd, sample_group_sizes, algorithm, machine_endianness, data_endianness);
+	} else if (bits_per_sample == 16) {
+		waveform_2_channel_16_bit(fd, sample_group_sizes, algorithm, machine_endianness, data_endianness);
+	}
+	return 0;
+}
+
 /* dispatcher */
-int calculate_waveform(FILE *fd, int *sample_group_sizes, int channel_count, int bits_per_sample, Algo_t algorithm, Endianness_t machine_endianness, Endianness_t data_endianness) {
+int calculate_waveform(FILE *fd, int sample_count, int channel_count, int bits_per_sample, Algo_t algorithm, Endianness_t machine_endianness, Endianness_t data_endianness) {
+
+	int* sample_group_sizes = get_sample_group_sizes(sample_count, points);
 
 	if (channel_count == 1) {
-
-		if (bits_per_sample == 8) {
-
-			if (machine_endianness == data_endianness) {
-
-				if (algorithm == RMS) {
-
-				} else if (algorithm == PEAK) {
-
-				} else if (algorithm == MEAN) {
-
-				}
-
-			} else  {
-
-				if (algorithm == RMS) {
-
-				} else if (algorithm == PEAK) {
-
-				} else if (algorithm == MEAN) {
-
-				}
-
-			}
-
-		} else if (bits_per_sample == 16) {
-
-			if (machine_endianness == data_endianness) {
-
-				if (algorithm == RMS) {
-
-					return waveform_1_channel_16_bit_same_endianness_rms(fd, sample_group_sizes);
-
-				} else if (algorithm == PEAK) {
-
-				} else if (algorithm == MEAN) {
-
-				}
-
-			} else  {
-
-				if (algorithm == RMS) {
-
-				} else if (algorithm == PEAK) {
-
-				} else if (algorithm == MEAN) {
-
-				}
-
-			}
-		}
-
+		return waveform_1_channel(fd, sample_group_sizes, bits_per_sample, algorithm, machine_endianness, data_endianness);
 	} else if (channel_count == 2) {
-
-		if (bits_per_sample == 8) {
-
-			if (machine_endianness == data_endianness) {
-
-				if (algorithm == RMS) {
-
-				} else if (algorithm == PEAK) {
-
-				} else if (algorithm == MEAN) {
-
-				}
-
-			} else  {
-
-				if (algorithm == RMS) {
-
-				} else if (algorithm == PEAK) {
-
-				} else if (algorithm == MEAN) {
-
-				}
-
-			}
-
-		} else if (bits_per_sample == 16) {
-
-			if (machine_endianness == data_endianness) {
-
-				if (algorithm == RMS) {
-					return waveform_2_channel_16_bit_same_endianness_rms(fd, sample_group_sizes);
-				} else if (algorithm == PEAK) {
-
-				} else if (algorithm == MEAN) {
-
-				}
-
-			} else  {
-
-				if (algorithm == RMS) {
-
-				} else if (algorithm == PEAK) {
-
-				} else if (algorithm == MEAN) {
-
-				}
-
-			}
-		}
-
+		return waveform_2_channel(fd, sample_group_sizes, bits_per_sample, algorithm, machine_endianness, data_endianness);
 	}
 
-	return(0);
+	free(sample_group_sizes);
 
+	return(0);
 }
 
 int main(int argc, char **argv) {
@@ -473,37 +433,37 @@ int main(int argc, char **argv) {
 	}
 
 	if (verbose_flag) {
-		fprintf(stderr, "verbose!\n");
+		if (debug_flag) fprintf(stderr, "verbose!\n");
 	}
 
 	if (points) {
-		fprintf(stderr, "points: %lu\n", points);
+		if (debug_flag) fprintf(stderr, "points: %lu\n", points);
 	}
 
 	if (algorithm == MEAN) {
-		fprintf(stderr, "using mean\n");
+		if (debug_flag) fprintf(stderr, "using mean\n");
 	} else if (algorithm == RMS) {
-		fprintf(stderr, "using rms\n");
+		if (debug_flag) fprintf(stderr, "using rms\n");
 	} else if (algorithm == PEAK) {
-		fprintf(stderr, "using peak\n");
+		if (debug_flag) fprintf(stderr, "using peak\n");
 	} else {
-		fprintf(stderr, "confused about algorithm\n");
+		if (debug_flag) fprintf(stderr, "confused about algorithm\n");
 	}
 
 	char* filename;
 
-	fprintf(stderr, "optind %d, argc %d\n", optind, argc);
+	if (debug_flag) fprintf(stderr, "optind %d, argc %d\n", optind, argc);
 
 	if (optind-1 < argc) {
 		filename = argv[optind];
 	}
 
 	if (filename) {
-		fprintf(stderr, "Filename: %s\n", filename);
+		if (debug_flag) fprintf(stderr, "Filename: %s\n", filename);
 	}
 
 	if (!filename) {
-		fprintf(stderr, "Reading stdin\n");
+		if (debug_flag) fprintf(stderr, "Reading stdin\n");
 	}
 
 	if (filename) {
@@ -529,14 +489,14 @@ int main(int argc, char **argv) {
 			break;
 	}
 
-	fprintf(stderr, "Your architecture is ");
+	if (debug_flag) fprintf(stderr, "Your architecture is ");
 
 	if (machine_endianness == BIG) {
-		fprintf(stderr, "big endian\n");
+		if (debug_flag) fprintf(stderr, "big endian\n");
 	} else if (machine_endianness == LITTLE) {
-		fprintf(stderr, "little endian\n");
+		if (debug_flag) fprintf(stderr, "little endian\n");
 	} else if (machine_endianness == MIXED) {
-		fprintf(stderr, "mixed endian\n");
+		if (debug_flag) fprintf(stderr, "mixed endian\n");
 	}
 
 	size_t items_read;
@@ -573,28 +533,28 @@ int main(int argc, char **argv) {
 	}
 
 	if (file_format == FORM_FILE) {
-		fprintf(stderr, "FORM file format\n");
+		if (debug_flag) fprintf(stderr, "FORM file format\n");
 		file_endianness = BIG;
 	} else if (file_format == RIFF_FILE) {
-		fprintf(stderr, "RIFF file format\n");
+		if (debug_flag) fprintf(stderr, "RIFF file format\n");
 		file_endianness = LITTLE;
 	} else {
-		fprintf(stderr, "Confusion in file format\n");
+		if (debug_flag) fprintf(stderr, "Confusion in file format\n");
 		exit(1);
 	}
 
-	fprintf(stderr, "Your file is ");
+	if (debug_flag) fprintf(stderr, "Your file is ");
 
 	if (file_endianness == BIG) {
-		fprintf(stderr, "big endian\n");
+		if (debug_flag) fprintf(stderr, "big endian\n");
 	} else if (file_endianness == LITTLE) {
-		fprintf(stderr, "little endian\n");
+		if (debug_flag) fprintf(stderr, "little endian\n");
 	}
 
 	if (file_endianness != machine_endianness) {
-		fprintf(stderr, "File size (sans RIFF/FORM header): %d\n", swap_int32(riff_header.file_size_sans_riff_header));
+		if (debug_flag) fprintf(stderr, "File size (sans RIFF/FORM header): %d\n", swap_int32(riff_header.file_size_sans_riff_header));
 	} else {
-		fprintf(stderr, "File size (sans RIFF/FORM header): %d\n", riff_header.file_size_sans_riff_header);
+		if (debug_flag) fprintf(stderr, "File size (sans RIFF/FORM header): %d\n", riff_header.file_size_sans_riff_header);
 	}
 
 	/* Now, we need to see what kind of file it is.  It's a RIFF if it
@@ -606,7 +566,7 @@ int main(int argc, char **argv) {
 
 	AudioFormat_t audio_format;
 
-	fprintf(stderr, "File type: %c%c%c%c\n", audio_type[0], audio_type[1], audio_type[2], audio_type[3]);
+	if (debug_flag) fprintf(stderr, "File type: %c%c%c%c\n", audio_type[0], audio_type[1], audio_type[2], audio_type[3]);
 
 	if (strncmp(audio_type, "WAVE", 4) == 0) {
 		audio_format = WAVE_FILE;
@@ -690,7 +650,7 @@ int main(int argc, char **argv) {
 		chunk_leftover = chunk_length;
 
 		if (strncmp(chunk_header.chunk_type, "fmt ", 4) == 0) {
-			fprintf(stderr, "Found fmt chunk with length %d\n", chunk_length);
+			if (debug_flag) fprintf(stderr, "Found fmt chunk with length %d\n", chunk_length);
 
 			/* these are all little-endian */
 			struct {
@@ -728,30 +688,25 @@ int main(int argc, char **argv) {
 
 			sample_rate = (machine_endianness != file_endianness ? swap_int32(fmt_chunk.sample_rate) : fmt_chunk.sample_rate);
 
-			fprintf(stderr, "Audio Format: %d, Channel Count: %d, Block Align: %d, Bits Per Sample: %d, Sample Rate: %d\n",
+			if (debug_flag) fprintf(stderr, "Audio Format: %d, Channel Count: %d, Block Align: %d, Bits Per Sample: %d, Sample Rate: %d\n",
 				audio_format, channel_count, block_align, bits_per_sample, sample_rate);
 
 			chunk_leftover = 0;
 
 		} else if (strncmp(chunk_header.chunk_type, "data", 4) == 0) {
-			fprintf(stderr, "Found data chunk with length %d\n", chunk_length);
+			if (debug_flag) fprintf(stderr, "Found data chunk with length %d\n", chunk_length);
 			we_are_done = 1;
 
 			sample_count = chunk_length / (bits_per_sample * channel_count / 8);
 
-			fprintf(stderr, "Sample Count: %d\n", sample_count);
+			if (debug_flag) fprintf(stderr, "Sample Count: %d\n", sample_count);
 
-			int* sample_group_sizes = get_sample_group_sizes(sample_count, points);
+			calculate_waveform(stdin, sample_count, channel_count, bits_per_sample, algorithm, machine_endianness, data_endianness);
 
-			calculate_waveform(stdin, sample_group_sizes, channel_count, bits_per_sample, algorithm, machine_endianness, data_endianness);
-
-			free(sample_group_sizes);
-
-			
 		} else if (strncmp(chunk_header.chunk_type, "COMM", 4) == 0) {
-			fprintf(stderr, "Found COMM chunk with length %d\n", chunk_length);
+			if (debug_flag) fprintf(stderr, "Found COMM chunk with length %d\n", chunk_length);
 		} else if (strncmp(chunk_header.chunk_type, "SSND", 4) == 0) {
-			fprintf(stderr, "Found SSND chunk with length %d\n", chunk_length);
+			if (debug_flag) fprintf(stderr, "Found SSND chunk with length %d\n", chunk_length);
 			we_are_done = 1;
 		}
 
