@@ -19,6 +19,20 @@
 	I don't use libsndfile or other such libraries to make reading
 	easier.  Instead, this is built to be as fast as possible and thus
 	has separate code paths depending on what is needed to read the file.
+
+	There are three optimizations here:
+
+	1. Inner loops are as simple as possible with minimal branching
+	inside of loops.
+
+	2. Inlining of commonly used functions, and minimal use of function
+	calls.
+
+	3. Integer arithmetic where possible.  The RMS function does make use
+	of some 64-bit integers but only uses floating point for the few
+	operations where it is required.  This will not run as fast on a
+	32-bit architecture and should probably be redone if you wish to use
+	it on such a machine.
 */
 
 #include <stdio.h>
