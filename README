@@ -40,3 +40,30 @@ integers from "0" to "255" inclusive.
 
 5. waveform accepts either a filename on the command line or it'll read
 stdin.  It can be used as a pipe filter.
+
+NOTE
+
+As of right now this will only work on 2-channel 16-bit sample files.
+It is fairly trivial to copy/modify the code to handle 1-channel and
+8-bit files.  There are 6 file handling routines now - all three
+algorithms (peak, rms, and mean) in two sets, one set for
+same endianness and one for different endianness.  Those need to be
+copied three more times to handle "8-bit mono", "16-bit mono", and
+"8-bit stereo".  It would also be possible to add 24-bit, 32-bit, and
+more than two channels.  As you can see the code would grow quickly and
+at some point it might make sense to create the routines via macros.
+
+It would be possible to simplify the code dramatically and have one main
+processing loop.  However, such code would have a lot of branches inside
+the main loop which would slow it down, although I haven't played with
+it to see what impact it would have.  My goal on this project is raw
+speed at the expense of everything else - I don't mind if I have code
+that is replicated save for a few minor differences.
+
+I have a Ruby version of this which outputs an actual PNG and takes
+around 3 minutes to compute a wave form.  This program outputs the same
+information in a text format and takes around 5/100ths of a second for
+my files.  The text format is more useful for me as I can easily
+create the PNG from that if I want, with that taking no more than
+another fraction of a second.  Ruby totally rocks, just not for this
+sort of heavy computation.
