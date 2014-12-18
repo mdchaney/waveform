@@ -47,7 +47,7 @@
 #pragma pack(1)
 
 static int verbose_flag, debug_flag, mono_flag;
-static unsigned long points;
+static unsigned long points = 1000;
 static double scale = 256;
 static int use_peak;
 static int use_mean;
