@@ -46,7 +46,7 @@
  * used exactly as shown. */
 #pragma pack(1)
 
-static int verbose_flag, debug_flag, mono_flag;
+static int verbose_flag = 0, debug_flag = 0, mono_flag = 0, raw_flag = 0;
 static unsigned long points = 1000;
 static double scale = 256;
 static int use_peak;
@@ -589,6 +589,64 @@ int calculate_waveform(FILE *fd, int sample_count, int channel_count, int bits_p
 	return(0);
 }
 
+/* This is confusing because an item in a chunk is a sample pair, and
+ * each sample is 2 bytes. */
+
+int calculate_waveform_from_raw(int16_t **chunks, int items_in_chunk, int sample_count, Algo_t algorithm) {
+	int* sample_group_sizes = get_sample_group_sizes(sample_count, points);
+
+	int i, items_read;
+
+	int (*funcptr)(int16_t*, int);
+
+	if (algorithm == RMS) {
+		funcptr = &waveform_2_channel_16_bit_same_endianness_rms;
+	} else if (algorithm == PEAK) {
+		funcptr = &waveform_2_channel_16_bit_same_endianness_peak;
+	} else if (algorithm == MEAN) {
+		funcptr = &waveform_2_channel_16_bit_same_endianness_mean;
+	}
+
+	int16_t *samples;
+	samples = (int16_t *) malloc(2 * 2 * (sample_group_sizes[0]+1));  /* 2 channels, 2 byte samples */
+
+	int points_to_read, samples_offset = 0, current_chunk = 0, chunk_offset = 0;
+
+	for (i=0 ; i<points; i++) {
+
+		points_to_read = sample_group_sizes[i];
+
+		/* I know that points_to_read will always be less than the size of
+		 * a chunk. */
+
+		if (debug_flag) fprintf(stderr, "%5d  %8d %9d  %3d  %7d\n", i, points_to_read, samples_offset, current_chunk, chunk_offset);
+
+		if (items_in_chunk - chunk_offset < points_to_read) {
+			/* need to pull from this chunk and next */
+			memcpy(samples, &chunks[current_chunk][chunk_offset*2], (items_in_chunk - chunk_offset) * 4);
+			if (debug_flag) fprintf(stderr, "split  %7d\n", items_in_chunk - chunk_offset);
+			current_chunk++;
+			memcpy(&samples[(items_in_chunk - chunk_offset)*2], &chunks[current_chunk][0], (points_to_read - (items_in_chunk - chunk_offset)) * 4);
+			if (debug_flag) fprintf(stderr, "split  %7d\n", points_to_read - (items_in_chunk - chunk_offset));
+			chunk_offset = points_to_read - (items_in_chunk - chunk_offset);
+			(*funcptr)(samples, points_to_read);
+		} else {
+			(*funcptr)(&chunks[current_chunk][chunk_offset*2], points_to_read);
+			chunk_offset += points_to_read;
+			if (chunk_offset >= items_in_chunk) {
+				chunk_offset = 0;
+				current_chunk++;
+			}
+		}
+
+		samples_offset += points_to_read;
+	}
+
+	free(samples);
+
+	return(1);
+}
+
 int main(int argc, char **argv) {
 	int i = 0, j = 0, k = 0; /* for use in loops */
 
@@ -604,6 +662,7 @@ int main(int argc, char **argv) {
 			{ "rms", no_argument, &use_rms, 1 },
 			{ "points", required_argument, 0, 'p' },
 			{ "scale", required_argument, 0, 's' },
+			{ "raw", no_argument, &raw_flag, 1 },
 			{ 0, 0, 0, 0 }
 		};
 
@@ -723,285 +782,331 @@ int main(int argc, char **argv) {
 
 	size_t items_read;
 
-	/* At this point, options are parsed and the file is opened.  We will
-	 * read the first 8 bytes and see if it's a RIFF header. */
+	if (raw_flag) {
 
-	typedef struct RIFF_HEADER {
-		char RIFF[4];
-		int32_t file_size_sans_riff_header;
-	} riff_header_struct;
+		/* reading raw pcm - probably from lame.  For now we'll assume
+		 * 16-bit stereo with same endianness as the machine.  In this
+		 * case we don't know how long the file will be, so we'll read it
+		 * all in to memory so that we'll know how big it is, then we'll
+		 * run the proper algorithm.  We'll read it in 1MB chunks.  */
 
-	riff_header_struct riff_header;
+		int we_are_done = 0, total_chunks = 0, item_size = 4, items_in_chunk = 250000, sample_count;
 
-	items_read = fread(&riff_header, sizeof(riff_header_struct), 1, stdin);
+		/* Hard coding a maximum size here of 200 chunks.  That would be
+		 * almost 20 minutes of audio, something of that size should be
+		 * rare. */
+		int16_t *chunks[200];
 
-	if (items_read != 1) {
-		fprintf(stderr, "Header unreadable\n");
-		exit(1);
-	}
+		while (1) {
+			chunks[total_chunks] = malloc(item_size * items_in_chunk);
 
-	if (strncmp(riff_header.RIFF, "RIFF", 4) != 0 && strncmp(riff_header.RIFF, "FORM", 4) != 0) {
-		fprintf(stderr, "No RIFF/FORM header\n");
-		exit(1);
-	}
+			items_read = fread(chunks[total_chunks], item_size, items_in_chunk, stdin);
 
-	FileFormat_t file_format;
-
-	/* If it's a FORM then the file size will be in big-endian order */
-	if (strncmp(riff_header.RIFF, "FORM", 4) == 0) {
-		file_format = FORM_FILE;
-	} else {
-		file_format = RIFF_FILE;
-	}
-
-	if (file_format == FORM_FILE) {
-		if (debug_flag) fprintf(stderr, "FORM file format\n");
-		file_endianness = BIG;
-	} else if (file_format == RIFF_FILE) {
-		if (debug_flag) fprintf(stderr, "RIFF file format\n");
-		file_endianness = LITTLE;
-	} else {
-		if (debug_flag) fprintf(stderr, "Confusion in file format\n");
-		exit(1);
-	}
-
-	if (debug_flag) fprintf(stderr, "Your file is ");
-
-	if (file_endianness == BIG) {
-		if (debug_flag) fprintf(stderr, "big endian\n");
-	} else if (file_endianness == LITTLE) {
-		if (debug_flag) fprintf(stderr, "little endian\n");
-	}
-
-	if (file_endianness != machine_endianness) {
-		if (debug_flag) fprintf(stderr, "File size (sans RIFF/FORM header): %d\n", swap_int32(riff_header.file_size_sans_riff_header));
-	} else {
-		if (debug_flag) fprintf(stderr, "File size (sans RIFF/FORM header): %d\n", riff_header.file_size_sans_riff_header);
-	}
-
-	/* Now, we need to see what kind of file it is.  It's a RIFF if it
-	 * got this far, this should be WAVE, AIFF or AIFC. */
-
-	char audio_type[4];
-
-	items_read = fread(audio_type, 4, 1, stdin);
-
-	AudioFormat_t audio_format;
-
-	if (debug_flag) fprintf(stderr, "File type: %c%c%c%c\n", audio_type[0], audio_type[1], audio_type[2], audio_type[3]);
-
-	if (strncmp(audio_type, "WAVE", 4) == 0) {
-		audio_format = WAVE_FILE;
-		data_endianness = LITTLE;
-	} else if (strncmp(audio_type, "AIFF", 4) == 0) {
-		audio_format = AIFF_FILE;
-		data_endianness = BIG;
-	} else if (strncmp(audio_type, "AIFC", 4) == 0) {
-		audio_format = AIFC_FILE;
-		data_endianness = LITTLE;
-	} else {
-		fprintf(stderr, "Unknown file type %c%c%c%c", audio_type[0], audio_type[1], audio_type[2], audio_type[3]);
-		exit(1);
-	}
-
-	/* Now, we have the file type, machine type, and audio type - time
-		to read chunks.
-
-	   We're only going to accept files for now where the description
-	   precedes the data.  This is normal, anyway.
-	 
-	 	For AIFF/AIFC:
-
-	 	COMM chunk - describes file
-	 	SSND chunk - holds actual sample data
-
-		For WAVE:
-
-		fmt\0 chunk - describes file
-		data chunk  - holds actual sample data
-
-		For WAVE and AIFC (with "sowt" compression) the data will be in
-		little-endian order.  For AIFF with no compression the data will
-		be in big-endian order.
-
-		If sample size is 8 bits in a WAVE file the samples are unsigned
-		8-bit integers with 128 being "0".  To get signed amplitude we
-		need to subtract 128 and turn it into a signed 8-bit integer
-		(range of -128 through +127).
-
-		If sample size is 16 bits the samples are already signed 16-bit
-		integers and can be handled directly.
-
-		For speed we have to simply handle each case separately.
-	*/
-
-	int we_are_done = 0;
-
-	int bits_per_sample, channel_count, sample_count, block_align;
-	int32_t sample_rate;
-
-	while (!we_are_done) {
-
-		struct {
-			char chunk_type[4];
-			int32_t chunk_length;
-		} chunk_header;
-
-		int32_t chunk_length, chunk_leftover;
-
-		items_read = fread(&chunk_header, 8, 1, stdin);
-
-   	if (items_read != 1) {
-			if (feof(stdin)) {
-				fprintf(stderr, "Unexpected EOF\n");
-				exit(1);
-			} else {
-	      	fprintf(stderr, "Header unreadable\n");
-		      exit(1);
-		   }
+			sample_count += items_read;
+			total_chunks++;
+	
+	   	if (items_read < items_in_chunk) {
+				if (feof(stdin)) {
+					break;
+				} else {
+		      	fprintf(stderr, "Some sort of weird read error\n");
+			      exit(1);
+			   }
+			}
 		}
 
-		/* Now we have the chunk header with type and length */
+		/* We now have a bunch of samples, time to do whatever with them. */
 
-		if (machine_endianness != file_endianness) {
-			chunk_length = swap_int32(chunk_header.chunk_length);
+		if (debug_flag) fprintf(stderr, "Sample Count: %d\n", sample_count);
+	
+		calculate_waveform_from_raw(chunks, items_in_chunk, sample_count, algorithm);
+
+		for (i=0 ; i<total_chunks; i++) {
+			free(chunks[i]);
+		}
+	
+	} else {
+
+		/* At this point, options are parsed and the file is opened.  We will
+		 * read the first 8 bytes and see if it's a RIFF header. */
+	
+		typedef struct RIFF_HEADER {
+			char RIFF[4];
+			int32_t file_size_sans_riff_header;
+		} riff_header_struct;
+	
+		riff_header_struct riff_header;
+	
+		items_read = fread(&riff_header, sizeof(riff_header_struct), 1, stdin);
+	
+		if (items_read != 1) {
+			fprintf(stderr, "Header unreadable\n");
+			exit(1);
+		}
+	
+		if (strncmp(riff_header.RIFF, "RIFF", 4) != 0 && strncmp(riff_header.RIFF, "FORM", 4) != 0) {
+			fprintf(stderr, "No RIFF/FORM header\n");
+			exit(1);
+		}
+	
+		FileFormat_t file_format;
+	
+		/* If it's a FORM then the file size will be in big-endian order */
+		if (strncmp(riff_header.RIFF, "FORM", 4) == 0) {
+			file_format = FORM_FILE;
 		} else {
-			chunk_length = chunk_header.chunk_length;
+			file_format = RIFF_FILE;
 		}
-
-		chunk_leftover = chunk_length;
-
-		if (strncmp(chunk_header.chunk_type, "fmt ", 4) == 0) {
-			if (debug_flag) fprintf(stderr, "Found fmt chunk with length %d\n", chunk_length);
-
-			/* these are all little-endian */
-			struct {
-				int16_t audio_format;
-				int16_t channel_count;
-				int32_t sample_rate;
-				int32_t byte_rate;
-				int16_t block_align;
-				int16_t bits_per_sample;
-				char    padding[30]; /* sometimes the chunk is longer */
-			} fmt_chunk;
-
-			if (chunk_length > sizeof(fmt_chunk)) {
-				fprintf(stderr, "fmt chunk length is too long, got %d but expected %lu\n", chunk_length, sizeof(fmt_chunk));
-				exit(1);
-			}
-
-			items_read = fread(&fmt_chunk, chunk_length, 1, stdin);
-
-			if (items_read != 1) {
-				fprintf(stderr, "Unreadable fmt chunk\n");
-				exit(1);
-			}
-
-			int16_t audio_format = (machine_endianness != file_endianness ?  swap_int16(fmt_chunk.audio_format) : fmt_chunk.audio_format);
-
-			if (audio_format != 1) {
-				fprintf(stderr, "Unusable wave format tag: %d\n", audio_format);
-				exit(1);
-			}
-
-			channel_count = (machine_endianness != file_endianness ? swap_int16(fmt_chunk.channel_count) : fmt_chunk.channel_count);
-			block_align = (machine_endianness != file_endianness ? swap_int16(fmt_chunk.block_align) : fmt_chunk.block_align);
-			bits_per_sample = (machine_endianness != file_endianness ? swap_int16(fmt_chunk.bits_per_sample) : fmt_chunk.bits_per_sample);
-
-			sample_rate = (machine_endianness != file_endianness ? swap_int32(fmt_chunk.sample_rate) : fmt_chunk.sample_rate);
-
-			if (debug_flag) fprintf(stderr, "Audio Format: %d, Channel Count: %d, Block Align: %d, Bits Per Sample: %d, Sample Rate: %d\n",
-				audio_format, channel_count, block_align, bits_per_sample, sample_rate);
-
-			chunk_leftover = 0;
-
-		} else if (strncmp(chunk_header.chunk_type, "data", 4) == 0) {
-			if (debug_flag) fprintf(stderr, "Found data chunk with length %d\n", chunk_length);
-			we_are_done = 1;
-
-			sample_count = chunk_length / (bits_per_sample * channel_count / 8);
-
-			if (debug_flag) fprintf(stderr, "Sample Count: %d\n", sample_count);
-
-			calculate_waveform(stdin, sample_count, channel_count, bits_per_sample, algorithm, machine_endianness, data_endianness);
-
-		} else if (strncmp(chunk_header.chunk_type, "COMM", 4) == 0) {
-			if (debug_flag) fprintf(stderr, "Found COMM chunk with length %d\n", chunk_length);
-
-			/* these are all big-endian */
-			struct {
-				int16_t channel_count;
-				int32_t sample_count;
-				int16_t bits_per_sample;
-				long double sample_rate;
-				char padding[30]; /* just in case */
-			} comm_chunk;
-
-			if (chunk_length > sizeof(comm_chunk)) {
-				fprintf(stderr, "comm chunk length is too long, got %d but expected %lu\n", chunk_length, sizeof(comm_chunk));
-				exit(1);
-			}
-
-			items_read = fread(&comm_chunk, chunk_length, 1, stdin);
-
-			if (items_read != 1) {
-				fprintf(stderr, "Unreadable comm chunk\n");
-				exit(1);
-			}
-
-			channel_count = (machine_endianness != file_endianness ? swap_int16(comm_chunk.channel_count) : comm_chunk.channel_count);
-			bits_per_sample = (machine_endianness != file_endianness ? swap_int16(comm_chunk.bits_per_sample) : comm_chunk.bits_per_sample);
-			sample_count = (machine_endianness != file_endianness ? swap_uint32(comm_chunk.sample_count) : comm_chunk.sample_count);
-
-			if (debug_flag) fprintf(stderr, "Channel Count: %d, Bits Per Sample: %d, Sample Count: %d\n",
-				channel_count, bits_per_sample, sample_count);
-
-			chunk_leftover = 0;
-
-		} else if (strncmp(chunk_header.chunk_type, "SSND", 4) == 0) {
-			if (debug_flag) fprintf(stderr, "Found SSND chunk with length %d\n", chunk_length);
-			we_are_done = 1;
-
-			/* The first 8 bytes are offset and blocksize */
-			struct {
-				uint32_t ssnd_offset, ssnd_blocksize;
-			} comm_subheader;
-
-			uint32_t ssnd_offset, ssnd_blocksize;
-
-			items_read = fread(&comm_subheader, sizeof(comm_subheader), 1, stdin);
-
-			if (items_read != 1) {
-				fprintf(stderr, "Unreadable comm chunk\n");
-				exit(1);
-			}
-
-			ssnd_offset = (machine_endianness != file_endianness ? swap_uint32(comm_subheader.ssnd_offset) : comm_subheader.ssnd_offset);
-			ssnd_blocksize = (machine_endianness != file_endianness ? swap_uint32(comm_subheader.ssnd_blocksize) : comm_subheader.ssnd_blocksize);
-
-			if (debug_flag) {
-				fprintf(stderr, "ssnd offset: %d, ssnd blocksize: %d\n", ssnd_offset, ssnd_blocksize);
-			}
-
-			/* if there's an offset we'll skip that many bytes */
-			if (ssnd_offset > 0) {
-				fseek(stdin, ssnd_offset, SEEK_CUR);
-			}
-
-			calculate_waveform(stdin, sample_count, channel_count, bits_per_sample, algorithm, machine_endianness, data_endianness);
-
-			chunk_leftover = 0;
+	
+		if (file_format == FORM_FILE) {
+			if (debug_flag) fprintf(stderr, "FORM file format\n");
+			file_endianness = BIG;
+		} else if (file_format == RIFF_FILE) {
+			if (debug_flag) fprintf(stderr, "RIFF file format\n");
+			file_endianness = LITTLE;
+		} else {
+			if (debug_flag) fprintf(stderr, "Confusion in file format\n");
+			exit(1);
 		}
-
-		if (fseek(stdin, chunk_leftover, SEEK_CUR) != 0) {
-			if (feof(stdin)) {
-				fprintf(stderr, "Unexpected EOF\n");
-				exit(1);
+	
+		if (debug_flag) fprintf(stderr, "Your file is ");
+	
+		if (file_endianness == BIG) {
+			if (debug_flag) fprintf(stderr, "big endian\n");
+		} else if (file_endianness == LITTLE) {
+			if (debug_flag) fprintf(stderr, "little endian\n");
+		}
+	
+		if (file_endianness != machine_endianness) {
+			if (debug_flag) fprintf(stderr, "File size (sans RIFF/FORM header): %d\n", swap_int32(riff_header.file_size_sans_riff_header));
+		} else {
+			if (debug_flag) fprintf(stderr, "File size (sans RIFF/FORM header): %d\n", riff_header.file_size_sans_riff_header);
+		}
+	
+		/* Now, we need to see what kind of file it is.  It's a RIFF if it
+		 * got this far, this should be WAVE, AIFF or AIFC. */
+	
+		char audio_type[4];
+	
+		items_read = fread(audio_type, 4, 1, stdin);
+	
+		AudioFormat_t audio_format;
+	
+		if (debug_flag) fprintf(stderr, "File type: %c%c%c%c\n", audio_type[0], audio_type[1], audio_type[2], audio_type[3]);
+	
+		if (strncmp(audio_type, "WAVE", 4) == 0) {
+			audio_format = WAVE_FILE;
+			data_endianness = LITTLE;
+		} else if (strncmp(audio_type, "AIFF", 4) == 0) {
+			audio_format = AIFF_FILE;
+			data_endianness = BIG;
+		} else if (strncmp(audio_type, "AIFC", 4) == 0) {
+			audio_format = AIFC_FILE;
+			data_endianness = LITTLE;
+		} else {
+			fprintf(stderr, "Unknown file type %c%c%c%c", audio_type[0], audio_type[1], audio_type[2], audio_type[3]);
+			exit(1);
+		}
+	
+		/* Now, we have the file type, machine type, and audio type - time
+			to read chunks.
+	
+		   We're only going to accept files for now where the description
+		   precedes the data.  This is normal, anyway.
+		 
+		 	For AIFF/AIFC:
+	
+		 	COMM chunk - describes file
+		 	SSND chunk - holds actual sample data
+	
+			For WAVE:
+	
+			fmt\0 chunk - describes file
+			data chunk  - holds actual sample data
+	
+			For WAVE and AIFC (with "sowt" compression) the data will be in
+			little-endian order.  For AIFF with no compression the data will
+			be in big-endian order.
+	
+			If sample size is 8 bits in a WAVE file the samples are unsigned
+			8-bit integers with 128 being "0".  To get signed amplitude we
+			need to subtract 128 and turn it into a signed 8-bit integer
+			(range of -128 through +127).
+	
+			If sample size is 16 bits the samples are already signed 16-bit
+			integers and can be handled directly.
+	
+			For speed we have to simply handle each case separately.
+		*/
+	
+		int we_are_done = 0;
+	
+		int bits_per_sample, channel_count, sample_count, block_align;
+		int32_t sample_rate;
+	
+		while (!we_are_done) {
+	
+			struct {
+				char chunk_type[4];
+				int32_t chunk_length;
+			} chunk_header;
+	
+			int32_t chunk_length, chunk_leftover;
+	
+			items_read = fread(&chunk_header, 8, 1, stdin);
+	
+	   	if (items_read != 1) {
+				if (feof(stdin)) {
+					fprintf(stderr, "Unexpected EOF\n");
+					exit(1);
+				} else {
+		      	fprintf(stderr, "Header unreadable\n");
+			      exit(1);
+			   }
+			}
+	
+			/* Now we have the chunk header with type and length */
+	
+			if (machine_endianness != file_endianness) {
+				chunk_length = swap_int32(chunk_header.chunk_length);
 			} else {
-	      	fprintf(stderr, "Chunk unreadable\n");
-		      exit(1);
-		   }
+				chunk_length = chunk_header.chunk_length;
+			}
+	
+			chunk_leftover = chunk_length;
+	
+			if (strncmp(chunk_header.chunk_type, "fmt ", 4) == 0) {
+				if (debug_flag) fprintf(stderr, "Found fmt chunk with length %d\n", chunk_length);
+	
+				/* these are all little-endian */
+				struct {
+					int16_t audio_format;
+					int16_t channel_count;
+					int32_t sample_rate;
+					int32_t byte_rate;
+					int16_t block_align;
+					int16_t bits_per_sample;
+					char    padding[30]; /* sometimes the chunk is longer */
+				} fmt_chunk;
+	
+				if (chunk_length > sizeof(fmt_chunk)) {
+					fprintf(stderr, "fmt chunk length is too long, got %d but expected %lu\n", chunk_length, sizeof(fmt_chunk));
+					exit(1);
+				}
+	
+				items_read = fread(&fmt_chunk, chunk_length, 1, stdin);
+	
+				if (items_read != 1) {
+					fprintf(stderr, "Unreadable fmt chunk\n");
+					exit(1);
+				}
+	
+				int16_t audio_format = (machine_endianness != file_endianness ?  swap_int16(fmt_chunk.audio_format) : fmt_chunk.audio_format);
+	
+				if (audio_format != 1) {
+					fprintf(stderr, "Unusable wave format tag: %d\n", audio_format);
+					exit(1);
+				}
+	
+				channel_count = (machine_endianness != file_endianness ? swap_int16(fmt_chunk.channel_count) : fmt_chunk.channel_count);
+				block_align = (machine_endianness != file_endianness ? swap_int16(fmt_chunk.block_align) : fmt_chunk.block_align);
+				bits_per_sample = (machine_endianness != file_endianness ? swap_int16(fmt_chunk.bits_per_sample) : fmt_chunk.bits_per_sample);
+	
+				sample_rate = (machine_endianness != file_endianness ? swap_int32(fmt_chunk.sample_rate) : fmt_chunk.sample_rate);
+	
+				if (debug_flag) fprintf(stderr, "Audio Format: %d, Channel Count: %d, Block Align: %d, Bits Per Sample: %d, Sample Rate: %d\n",
+					audio_format, channel_count, block_align, bits_per_sample, sample_rate);
+	
+				chunk_leftover = 0;
+	
+			} else if (strncmp(chunk_header.chunk_type, "data", 4) == 0) {
+				if (debug_flag) fprintf(stderr, "Found data chunk with length %d\n", chunk_length);
+				we_are_done = 1;
+	
+				sample_count = chunk_length / (bits_per_sample * channel_count / 8);
+	
+				if (debug_flag) fprintf(stderr, "Sample Count: %d\n", sample_count);
+	
+				calculate_waveform(stdin, sample_count, channel_count, bits_per_sample, algorithm, machine_endianness, data_endianness);
+	
+			} else if (strncmp(chunk_header.chunk_type, "COMM", 4) == 0) {
+				if (debug_flag) fprintf(stderr, "Found COMM chunk with length %d\n", chunk_length);
+	
+				/* these are all big-endian */
+				struct {
+					int16_t channel_count;
+					int32_t sample_count;
+					int16_t bits_per_sample;
+					long double sample_rate;
+					char padding[30]; /* just in case */
+				} comm_chunk;
+	
+				if (chunk_length > sizeof(comm_chunk)) {
+					fprintf(stderr, "comm chunk length is too long, got %d but expected %lu\n", chunk_length, sizeof(comm_chunk));
+					exit(1);
+				}
+	
+				items_read = fread(&comm_chunk, chunk_length, 1, stdin);
+	
+				if (items_read != 1) {
+					fprintf(stderr, "Unreadable comm chunk\n");
+					exit(1);
+				}
+	
+				channel_count = (machine_endianness != file_endianness ? swap_int16(comm_chunk.channel_count) : comm_chunk.channel_count);
+				bits_per_sample = (machine_endianness != file_endianness ? swap_int16(comm_chunk.bits_per_sample) : comm_chunk.bits_per_sample);
+				sample_count = (machine_endianness != file_endianness ? swap_uint32(comm_chunk.sample_count) : comm_chunk.sample_count);
+	
+				if (debug_flag) fprintf(stderr, "Channel Count: %d, Bits Per Sample: %d, Sample Count: %d\n",
+					channel_count, bits_per_sample, sample_count);
+	
+				chunk_leftover = 0;
+	
+			} else if (strncmp(chunk_header.chunk_type, "SSND", 4) == 0) {
+				if (debug_flag) fprintf(stderr, "Found SSND chunk with length %d\n", chunk_length);
+				we_are_done = 1;
+	
+				/* The first 8 bytes are offset and blocksize */
+				struct {
+					uint32_t ssnd_offset, ssnd_blocksize;
+				} comm_subheader;
+	
+				uint32_t ssnd_offset, ssnd_blocksize;
+	
+				items_read = fread(&comm_subheader, sizeof(comm_subheader), 1, stdin);
+	
+				if (items_read != 1) {
+					fprintf(stderr, "Unreadable comm chunk\n");
+					exit(1);
+				}
+	
+				ssnd_offset = (machine_endianness != file_endianness ? swap_uint32(comm_subheader.ssnd_offset) : comm_subheader.ssnd_offset);
+				ssnd_blocksize = (machine_endianness != file_endianness ? swap_uint32(comm_subheader.ssnd_blocksize) : comm_subheader.ssnd_blocksize);
+	
+				if (debug_flag) {
+					fprintf(stderr, "ssnd offset: %d, ssnd blocksize: %d\n", ssnd_offset, ssnd_blocksize);
+				}
+	
+				/* if there's an offset we'll skip that many bytes */
+				if (ssnd_offset > 0) {
+					fseek(stdin, ssnd_offset, SEEK_CUR);
+				}
+	
+				calculate_waveform(stdin, sample_count, channel_count, bits_per_sample, algorithm, machine_endianness, data_endianness);
+	
+				chunk_leftover = 0;
+			}
+	
+			if (fseek(stdin, chunk_leftover, SEEK_CUR) != 0) {
+				if (feof(stdin)) {
+					fprintf(stderr, "Unexpected EOF\n");
+					exit(1);
+				} else {
+		      	fprintf(stderr, "Chunk unreadable\n");
+			      exit(1);
+			   }
+			}
+	
 		}
-
 	}
 }
