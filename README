@@ -41,6 +41,26 @@ integers from "0" to "255" inclusive.
 5. waveform accepts either a filename on the command line or it'll read
 stdin.  It can be used as a pipe filter.
 
+6. Use --raw to read raw PCM data and create a waveform from the data
+set.  Here's how it is used:
+
+% lame --silent --decode -t great_song.mp3 - | waveform --raw --peak --points 1000 --scale 255
+
+That will use lame to decode to raw pcm and then waveform to read it and
+make a wave form.  Unfortunately we have to use the "-t" flag with lame
+in order to generate raw PCM data.  It can generate a WAVE file but
+there are two problems: 1) it's in whatever endianness the current
+processor uses meaning it'll be wrong on a big-endian machine and
+require yet another flag to fix it and 2) the sizes in the RIFF header
+and the data chunk header are set to gibberish - both are huge negative
+numbers.
+
+Using "--raw" with waveform makes it assume 16-bit samples, same
+endianness as the current machine, and stereo samples.  The code for
+reading the data is quite efficient and will read the entire data set
+into memory while only requiring one extra buffer to hold enough samples
+for one output data point.  On modern hardware that should be fine.
+
 NOTE
 
 As of right now this will only work on 2-channel 16-bit sample files.
