@@ -181,7 +181,25 @@ int* get_sample_group_sizes(int sample_count, int points) {
 	return(sample_group_sizes);
 }
 
+/*
+	This group of functions handles 16-bit samples.  They can be:
+	1. 1 or 2 channel
+	2. same or different endianness
+	3. rms, peak, or mean calculation
+	So, for 16-bit samples there are 12 functions.
+	And, yes, I could roll them into a function but it would include
+	branching or further function calls within the main loop, slowing
+	things down.
+*/
+
 int waveform_1_channel_16_bit_same_endianness_rms(FILE *fd, int *sample_group_sizes) {
+
+	/* this code is where:
+	 * machine_endianness == data_endianness
+	 * channel_count == 1
+	 * bits_per_sample == 16
+	 * algorithm == RMS
+	 */
 
 	int i, j, items_read;
 	int16_t *samples, *sample_pointer;
@@ -221,6 +239,169 @@ int waveform_1_channel_16_bit_same_endianness_rms(FILE *fd, int *sample_group_si
 	}
 
 	free(samples);
+
+	return(1);
+}
+
+int waveform_1_channel_16_bit_diff_endianness_rms(FILE *fd, int *sample_group_sizes) {
+
+	/* this code is where:
+	 * machine_endianness != data_endianness
+	 * channel_count == 1
+	 * bits_per_sample == 16
+	 * algorithm == RMS
+	 */
+
+	int i, j, items_read;
+	int16_t *samples, *sample_pointer;
+	samples = (int16_t *) malloc(2 * (sample_group_sizes[0]+1));  /* 1 channel, 2 byte samples */
+
+	for (i=0 ; i<points; i++) {
+
+		int points_to_read = sample_group_sizes[i];
+
+		items_read = fread(samples, 2, points_to_read, fd);
+
+		if (items_read != points_to_read) {
+			if (feof(fd)) {
+				fprintf(stderr, "Unexpected EOF\n");
+				exit(1);
+			} else {
+				fprintf(stderr, "Chunk unreadable\n");
+				exit(1);
+			}
+		}
+
+		int64_t sum_of_squares_0=0;
+		double rms_0;
+
+		sample_pointer = samples;
+		for (j=0 ; j<points_to_read ; j++) {
+			int64_t sample_point = swap_int16(*sample_pointer);
+			sum_of_squares_0 += (sample_point * sample_point);
+			sample_pointer++;
+		}
+		/* At this point we have the sums of the squares of
+		 * the sample group.  We'll do our floating point math
+		 * here to get the square root. */
+		rms_0 = sqrt((double)sum_of_squares_0 / (double)points_to_read);
+
+		printf("%u\n", (int)floor(rms_0 * scale / 32768.0));
+	}
+
+	free(samples);
+
+	return(1);
+}
+
+int waveform_1_channel_16_bit_same_endianness_peak(int16_t *samples, int sample_group_size) {
+
+	/* this code is where:
+	 * machine_endianness == data_endianness
+	 * channel_count == 1
+	 * bits_per_sample == 16
+	 * algorithm == PEAK
+	 */
+
+	int i, j, items_read;
+
+	int16_t *sample_pointer = samples;
+
+	int16_t sample_point, peak_0=0, peak_1=0;
+
+	for (j=0 ; j<sample_group_size ; j++) {
+		sample_point = *sample_pointer;
+		sample_point = abs(sample_point);
+		if (sample_point > peak_0) peak_0 = sample_point;
+		sample_pointer++;
+	}
+	printf("%u\n", (int)floor((double)peak_0 * scale / 32768.0));
+
+	return(1);
+}
+
+int waveform_1_channel_16_bit_diff_endianness_peak(int16_t *samples, int sample_group_size) {
+
+	/* this code is where:
+	 * machine_endianness != data_endianness
+	 * channel_count == 1
+	 * bits_per_sample == 16
+	 * algorithm == PEAK
+	 */
+
+	int i, j, items_read;
+
+	int16_t *sample_pointer = samples;
+
+	int16_t sample_point, peak_0=0, peak_1=0;
+
+	for (j=0 ; j<sample_group_size ; j++) {
+		sample_point = swap_int16(*sample_pointer);
+		sample_point = abs(sample_point);
+		if (sample_point > peak_0) peak_0 = sample_point;
+		sample_pointer++;
+	}
+	printf("%u\n", (int)floor((double)peak_0 * scale / 32768.0));
+
+	return(1);
+}
+
+int waveform_1_channel_16_bit_same_endianness_mean(int16_t *samples, int sample_group_size) {
+
+	/* this code is where:
+	 * machine_endianness == data_endianness
+	 * channel_count == 1
+	 * bits_per_sample == 16
+	 * algorithm == MEAN
+	 */
+
+	int i, j, items_read;
+
+	int16_t *sample_pointer = samples;
+
+	int64_t sample_point, sum_of_samples_0=0, sum_of_samples_1=0;
+	double mean_0, mean_1;
+
+	for (j=0 ; j<sample_group_size ; j++) {
+		sum_of_samples_0 += abs(*sample_pointer);
+		sample_pointer++;
+	}
+	/* At this point we have the sums of the squares of
+	 * the sample group.  We'll do our floating point math
+	 * here to get the square root. */
+	mean_0 = (double)sum_of_samples_0 / ((double)sample_group_size * 2.0);
+
+	printf("%u\n", (int)floor(mean_0 * scale / 32768.0));
+
+	return(1);
+}
+
+int waveform_1_channel_16_bit_diff_endianness_mean(int16_t *samples, int sample_group_size) {
+
+	/* this code is where:
+	 * machine_endianness != data_endianness
+	 * channel_count == 1
+	 * bits_per_sample == 16
+	 * algorithm == MEAN
+	 */
+
+	int i, j, items_read;
+
+	int16_t *sample_pointer = samples;
+
+	int64_t sample_point, sum_of_samples_0=0, sum_of_samples_1=0;
+	double mean_0, mean_1;
+
+	for (j=0 ; j<sample_group_size ; j++) {
+		sum_of_samples_0 += abs(*sample_pointer);
+		sample_pointer++;
+	}
+	/* At this point we have the sums of the squares of
+	 * the sample group.  We'll do our floating point math
+	 * here to get the square root. */
+	mean_0 = (double)sum_of_samples_0 / ((double)sample_group_size * 2.0);
+
+	printf("%u\n", (int)floor(mean_0 * scale / 32768.0));
 
 	return(1);
 }
@@ -503,9 +684,55 @@ int waveform_1_channel_8_bit(FILE *fd, int *sample_group_sizes, Algo_t algorithm
 }
 
 int waveform_1_channel_16_bit(FILE *fd, int *sample_group_sizes, Algo_t algorithm, Endianness_t machine_endianness, Endianness_t data_endianness) {
-	printf("Single channel 16 bit not implemented\n");
-	abort();
-	return 0;
+
+	int i, items_read;
+
+	int (*funcptr)(int16_t*, int);
+
+	if (machine_endianness == data_endianness) {
+		if (algorithm == RMS) {
+			funcptr = &waveform_1_channel_16_bit_same_endianness_rms;
+		} else if (algorithm == PEAK) {
+			funcptr = &waveform_1_channel_16_bit_same_endianness_peak;
+		} else if (algorithm == MEAN) {
+			funcptr = &waveform_1_channel_16_bit_same_endianness_mean;
+		}
+	} else {
+		/* different endianness */
+		if (algorithm == RMS) {
+			funcptr = &waveform_1_channel_16_bit_diff_endianness_rms;
+		} else if (algorithm == PEAK) {
+			funcptr = &waveform_1_channel_16_bit_diff_endianness_peak;
+		} else if (algorithm == MEAN) {
+			funcptr = &waveform_1_channel_16_bit_diff_endianness_mean;
+		}
+	}
+
+	int16_t *samples;
+	samples = (int16_t *) malloc(2 * (sample_group_sizes[0]+1));  /* 1 channel, 2 byte samples */
+
+	for (i=0 ; i<points; i++) {
+
+		int points_to_read = sample_group_sizes[i];
+
+		items_read = fread(samples, 2, points_to_read, fd);
+
+		if (items_read != points_to_read) {
+			if (feof(fd)) {
+				fprintf(stderr, "Unexpected EOF\n");
+				exit(1);
+			} else {
+				fprintf(stderr, "Chunk unreadable\n");
+				exit(1);
+			}
+		}
+
+		(*funcptr)(samples, points_to_read);
+	}
+
+	free(samples);
+
+	return(1);
 }
 
 int waveform_2_channel_8_bit(FILE *fd, int *sample_group_sizes, Algo_t algorithm, Endianness_t machine_endianness, Endianness_t data_endianness) {
