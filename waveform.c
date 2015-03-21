@@ -58,6 +58,11 @@ typedef enum { RIFF_FILE, FORM_FILE } FileFormat_t;
 typedef enum { WAVE_FILE, AIFF_FILE, AIFC_FILE } AudioFormat_t;
 typedef enum { RMS, MEAN, PEAK } Algo_t;
 
+/*
+	These inline functions take care of byte swapping if the endiannesses
+	of the file and machine differ.
+*/
+
 /* byte swap unsigned 16-bit int */
 static inline uint16_t swap_uint16(uint16_t val) {
 	return (val << 8) | (val >> 8 );
@@ -485,6 +490,12 @@ int waveform_2_channel_16_bit_diff_endianness_mean(int16_t *samples, int sample_
 	return(1);
 }
 
+/*
+	The following functions are dispatchers and are based on number of
+	channels and sample size.  This leaves us with 6 functions since we
+	do 8, 16, and 24 bit samples and one or two channels.
+*/
+
 int waveform_1_channel_8_bit(FILE *fd, int *sample_group_sizes, Algo_t algorithm, Endianness_t machine_endianness, Endianness_t data_endianness) {
 	printf("Single channel 8 bit not implemented\n");
 	abort();
@@ -555,6 +566,11 @@ int waveform_2_channel_16_bit(FILE *fd, int *sample_group_sizes, Algo_t algorith
 	return(1);
 }
 
+/*
+  These are the second level dispatchers which are based only on
+  channel count.
+*/
+
 int waveform_1_channel(FILE *fd, int *sample_group_sizes, int bits_per_sample, Algo_t algorithm, Endianness_t machine_endianness, Endianness_t data_endianness) {
 	if (bits_per_sample == 8) {
 		waveform_1_channel_8_bit(fd, sample_group_sizes, algorithm, machine_endianness, data_endianness);
@@ -573,7 +589,10 @@ int waveform_2_channel(FILE *fd, int *sample_group_sizes, int bits_per_sample, A
 	return 0;
 }
 
-/* dispatcher */
+/*
+  This is the top level dispatcher.  It will dispatch based only on
+  channel count.
+*/
 int calculate_waveform(FILE *fd, int sample_count, int channel_count, int bits_per_sample, Algo_t algorithm, Endianness_t machine_endianness, Endianness_t data_endianness) {
 
 	int* sample_group_sizes = get_sample_group_sizes(sample_count, points);
