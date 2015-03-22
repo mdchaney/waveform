@@ -632,10 +632,127 @@ int waveform_2_channel_16_bit_diff_endianness_mean(int16_t *samples, int sample_
 }
 
 /*
+	These are the functions for 24-bit samples
+*/
+
+int waveform_2_channel_24_bit_same_endianness_peak(int8_t *samples, int sample_group_size) {
+
+	/* this code is where:
+	 * machine_endianness == data_endianness
+	 * channel_count == 2
+	 * bits_per_sample ==24 
+	 * algorithm == PEAK
+	 */
+
+	/* Note that 8388608 is 2^23 */
+
+	int i, j, items_read;
+
+	int8_t *sample_pointer = samples;
+
+	uint64_t raw_sample_point;
+	int32_t sample_point_0, sample_point_1, peak_0=0, peak_1=0;
+
+	for (j=0 ; j<sample_group_size ; j++) {
+		raw_sample_point = *(uint64_t *)sample_pointer;
+		sample_pointer += 6;
+
+		/* get two 3-byte numbers out of the bottom 6 bytes of the 64-bit int */
+		sample_point_0 = raw_sample_point & 0x00FFFFFF;
+		sample_point_1 = (raw_sample_point >> 24) & 0x00FFFFFF;
+
+		sample_point_0 = abs(sample_point_0);
+		sample_point_1 = abs(sample_point_1);
+
+		if (sample_point_0 > peak_0) peak_0 = sample_point_0;
+		if (sample_point_1 > peak_1) peak_1 = sample_point_1;
+	}
+
+	if (mono_flag) {
+		if (peak_1 > peak_0) peak_0 = peak_1;
+		printf("%u\n", (int)floor((double)peak_0 * scale / 8388608.0));
+	} else {
+		printf("%u,%u\n", (int)floor((double)peak_0 * scale / 8388608.0), (int)floor((double)peak_1 * scale / 8388608.0));
+	}
+
+	return(1);
+}
+
+int waveform_2_channel_24_bit_diff_endianness_peak(int8_t *samples, int sample_group_size) {
+
+	/* this code is where:
+	 * machine_endianness != data_endianness
+	 * channel_count == 2
+	 * bits_per_sample ==24 
+	 * algorithm == PEAK
+	 */
+
+	/* Note that 8388608 is 2^23 */
+
+	int i, j, items_read;
+
+	int8_t *sample_pointer = samples;
+
+	uint32_t raw_sample_point;
+	int32_t sample_point_0, sample_point_1, peak_0=0, peak_1=0;
+
+	for (j=0 ; j<sample_group_size ; j++) {
+		raw_sample_point = *(uint64_t *)sample_pointer;
+		/* ugh - relying on architecture allowing unaligned access */
+		sample_pointer += 3;
+
+		/* Get two 3-byte numbers out of the top 6 bytes of the 64-bit int
+			while swapping endianness.  There's simply no good way to do this.
+			I'm praying the cpu has a 64-bit barrel shifter.
+		*/
+		sample_point_0 =
+			(((raw_sample_point & 0x000000FF) << 16) |
+			 ((raw_sample_point & 0x0000FF00) ) |
+			 ((raw_sample_point & 0x00FF0000) >> 16)) & 0x00FFFFFF;
+		/* This will pull the high-bit out over the high 8 bits.  This is a 2s complement
+			number but it's just 24 bits.  If it's negative (high bit set) then we need to
+			set the rest of the high bits above it. */
+		if (sample_point_0 & 0x800000) sample_point_0 = sample_point_0 | 0xFF000000;
+		sample_point_0 = abs(sample_point_0);
+
+		if (sample_point_0 > peak_0) peak_0 = sample_point_0;
+
+		raw_sample_point = *(uint64_t *)sample_pointer;
+		/* ugh - relying on architecture allowing unaligned access */
+		sample_pointer += 3;
+
+		sample_point_1 =
+			(((raw_sample_point & 0x000000FF) << 16) |
+			 ((raw_sample_point & 0x0000FF00) ) |
+			 ((raw_sample_point & 0x00FF0000) >> 16)) & 0x00FFFFFF;
+		if (sample_point_1 & 0x800000) sample_point_1 = sample_point_1 | 0xFF000000;
+
+		sample_point_1 = abs(sample_point_1);
+
+		if (sample_point_1 > peak_1) peak_1 = sample_point_1;
+	}
+
+	if (mono_flag) {
+		if (peak_1 > peak_0) peak_0 = peak_1;
+		printf("%u\n", (int)floor((double)peak_0 * scale / 8388608.0));
+	} else {
+		printf("%u,%u\n", (int)floor((double)peak_0 * scale / 8388608.0), (int)floor((double)peak_1 * scale / 8388608.0));
+	}
+
+	return(1);
+}
+
+/*
 	The following functions are dispatchers and are based on number of
 	channels and sample size.  This leaves us with 6 functions since we
 	do 8, 16, and 24 bit samples and one or two channels.
 */
+
+int not_implemented(int8_t *samples, int sample_group_size) {
+	printf("Not implemented\n");
+	abort();
+	return 0;
+}
 
 int waveform_1_channel_8_bit(FILE *fd, int *sample_group_sizes, Algo_t algorithm, Endianness_t machine_endianness, Endianness_t data_endianness) {
 	printf("Single channel 8 bit not implemented\n");
@@ -676,6 +793,60 @@ int waveform_1_channel_16_bit(FILE *fd, int *sample_group_sizes, Algo_t algorith
 		int points_to_read = sample_group_sizes[i];
 
 		items_read = fread(samples, 2, points_to_read, fd);
+
+		if (items_read != points_to_read) {
+			if (feof(fd)) {
+				fprintf(stderr, "Unexpected EOF\n");
+				exit(1);
+			} else {
+				fprintf(stderr, "Chunk unreadable\n");
+				exit(1);
+			}
+		}
+
+		(*funcptr)(samples, points_to_read);
+	}
+
+	free(samples);
+
+	return(1);
+}
+
+int waveform_1_channel_24_bit(FILE *fd, int *sample_group_sizes, Algo_t algorithm, Endianness_t machine_endianness, Endianness_t data_endianness) {
+
+	int i, items_read;
+
+	int (*funcptr)(int32_t*, int);
+
+	funcptr = &not_implemented;
+
+	if (machine_endianness == data_endianness) {
+		if (algorithm == RMS) {
+/*			funcptr = &waveform_1_channel_24_bit_same_endianness_rms; */
+		} else if (algorithm == PEAK) {
+/*			funcptr = &waveform_1_channel_24_bit_same_endianness_peak; */
+		} else if (algorithm == MEAN) {
+/*			funcptr = &waveform_1_channel_24_bit_same_endianness_mean; */
+		}
+	} else {
+		/* different endianness */
+		if (algorithm == RMS) {
+/*			funcptr = &waveform_1_channel_24_bit_diff_endianness_rms; */
+		} else if (algorithm == PEAK) {
+/*			funcptr = &waveform_1_channel_24_bit_diff_endianness_peak; */
+		} else if (algorithm == MEAN) {
+/*			funcptr = &waveform_1_channel_24_bit_diff_endianness_mean; */
+		}
+	}
+
+	int8_t *samples;
+	samples = (int8_t *) malloc(3 * (sample_group_sizes[0]+1));  /* 1 channel, 3 byte samples */
+
+	for (i=0 ; i<points; i++) {
+
+		int points_to_read = sample_group_sizes[i];
+
+		items_read = fread(samples, 3, points_to_read, fd);
 
 		if (items_read != points_to_read) {
 			if (feof(fd)) {
@@ -753,6 +924,60 @@ int waveform_2_channel_16_bit(FILE *fd, int *sample_group_sizes, Algo_t algorith
 	return(1);
 }
 
+int waveform_2_channel_24_bit(FILE *fd, int *sample_group_sizes, Algo_t algorithm, Endianness_t machine_endianness, Endianness_t data_endianness) {
+
+	int i, items_read;
+
+	int (*funcptr)(int8_t*, int);
+
+	funcptr = &not_implemented;
+
+	if (machine_endianness == data_endianness) {
+		if (algorithm == RMS) {
+/*			funcptr = &waveform_2_channel_24_bit_same_endianness_rms; */
+		} else if (algorithm == PEAK) {
+			funcptr = &waveform_2_channel_24_bit_same_endianness_peak;
+		} else if (algorithm == MEAN) {
+/*			funcptr = &waveform_2_channel_24_bit_same_endianness_mean; */
+		}
+	} else {
+		/* different endianness */
+		if (algorithm == RMS) {
+/*			funcptr = &waveform_2_channel_24_bit_diff_endianness_rms; */
+		} else if (algorithm == PEAK) {
+			funcptr = &waveform_2_channel_24_bit_diff_endianness_peak;
+		} else if (algorithm == MEAN) {
+/*			funcptr = &waveform_2_channel_24_bit_diff_endianness_mean; */
+		}
+	}
+
+	int8_t *samples;
+	samples = (int8_t *) malloc(2 * 3 * (sample_group_sizes[0]+16));  /* 2 channels, 3 byte samples, plus padding */
+
+	for (i=0 ; i<points; i++) {
+
+		int points_to_read = sample_group_sizes[i];
+
+		items_read = fread(samples, 2 * 3, points_to_read, fd);
+
+		if (items_read != points_to_read) {
+			if (feof(fd)) {
+				fprintf(stderr, "Unexpected EOF\n");
+				exit(1);
+			} else {
+				fprintf(stderr, "Chunk unreadable\n");
+				exit(1);
+			}
+		}
+
+		(*funcptr)(samples, points_to_read);
+	}
+
+	free(samples);
+
+	return(1);
+}
+
 /*
   These are the second level dispatchers which are based only on
   channel count.
@@ -763,6 +988,8 @@ int waveform_1_channel(FILE *fd, int *sample_group_sizes, int bits_per_sample, A
 		waveform_1_channel_8_bit(fd, sample_group_sizes, algorithm, machine_endianness, data_endianness);
 	} else if (bits_per_sample == 16) {
 		waveform_1_channel_16_bit(fd, sample_group_sizes, algorithm, machine_endianness, data_endianness);
+	} else if (bits_per_sample == 24) {
+		waveform_1_channel_24_bit(fd, sample_group_sizes, algorithm, machine_endianness, data_endianness);
 	}
 	return 0;
 }
@@ -772,6 +999,8 @@ int waveform_2_channel(FILE *fd, int *sample_group_sizes, int bits_per_sample, A
 		waveform_2_channel_8_bit(fd, sample_group_sizes, algorithm, machine_endianness, data_endianness);
 	} else if (bits_per_sample == 16) {
 		waveform_2_channel_16_bit(fd, sample_group_sizes, algorithm, machine_endianness, data_endianness);
+	} else if (bits_per_sample == 24) {
+		waveform_2_channel_24_bit(fd, sample_group_sizes, algorithm, machine_endianness, data_endianness);
 	}
 	return 0;
 }
