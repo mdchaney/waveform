@@ -192,7 +192,7 @@ int* get_sample_group_sizes(int sample_count, int points) {
 	things down.
 */
 
-int waveform_1_channel_16_bit_same_endianness_rms(FILE *fd, int *sample_group_sizes) {
+int waveform_1_channel_16_bit_same_endianness_rms(int16_t *samples, int sample_group_size) {
 
 	/* this code is where:
 	 * machine_endianness == data_endianness
@@ -202,48 +202,28 @@ int waveform_1_channel_16_bit_same_endianness_rms(FILE *fd, int *sample_group_si
 	 */
 
 	int i, j, items_read;
-	int16_t *samples, *sample_pointer;
-	samples = (int16_t *) malloc(2 * (sample_group_sizes[0]+1));  /* 1 channel, 2 byte samples */
+	int16_t *sample_pointer;
 
-	for (i=0 ; i<points; i++) {
+	int64_t sum_of_squares_0=0;
+	double rms_0;
 
-		int points_to_read = sample_group_sizes[i];
-
-		items_read = fread(samples, 2, points_to_read, fd);
-
-		if (items_read != points_to_read) {
-			if (feof(fd)) {
-				fprintf(stderr, "Unexpected EOF\n");
-				exit(1);
-			} else {
-				fprintf(stderr, "Chunk unreadable\n");
-				exit(1);
-			}
-		}
-
-		int64_t sum_of_squares_0=0;
-		double rms_0;
-
-		sample_pointer = samples;
-		for (j=0 ; j<points_to_read ; j++) {
-			int64_t sample_point = *sample_pointer;
-			sum_of_squares_0 += (sample_point * sample_point);
-			sample_pointer++;
-		}
-		/* At this point we have the sums of the squares of
-		 * the sample group.  We'll do our floating point math
-		 * here to get the square root. */
-		rms_0 = sqrt((double)sum_of_squares_0 / (double)points_to_read);
-
-		printf("%u\n", (int)floor(rms_0 * scale / 32768.0));
+	sample_pointer = samples;
+	for (j=0 ; j<sample_group_size ; j++) {
+		int64_t sample_point = *sample_pointer;
+		sum_of_squares_0 += (sample_point * sample_point);
+		sample_pointer++;
 	}
+	/* At this point we have the sums of the squares of
+	 * the sample group.  We'll do our floating point math
+	 * here to get the square root. */
+	rms_0 = sqrt((double)sum_of_squares_0 / (double)sample_group_size);
 
-	free(samples);
+	printf("%u\n", (int)floor(rms_0 * scale / 32768.0));
 
 	return(1);
 }
 
-int waveform_1_channel_16_bit_diff_endianness_rms(FILE *fd, int *sample_group_sizes) {
+int waveform_1_channel_16_bit_diff_endianness_rms(int16_t *samples, int sample_group_size) {
 
 	/* this code is where:
 	 * machine_endianness != data_endianness
@@ -253,43 +233,23 @@ int waveform_1_channel_16_bit_diff_endianness_rms(FILE *fd, int *sample_group_si
 	 */
 
 	int i, j, items_read;
-	int16_t *samples, *sample_pointer;
-	samples = (int16_t *) malloc(2 * (sample_group_sizes[0]+1));  /* 1 channel, 2 byte samples */
+	int16_t *sample_pointer;
 
-	for (i=0 ; i<points; i++) {
+	int64_t sum_of_squares_0=0;
+	double rms_0;
 
-		int points_to_read = sample_group_sizes[i];
-
-		items_read = fread(samples, 2, points_to_read, fd);
-
-		if (items_read != points_to_read) {
-			if (feof(fd)) {
-				fprintf(stderr, "Unexpected EOF\n");
-				exit(1);
-			} else {
-				fprintf(stderr, "Chunk unreadable\n");
-				exit(1);
-			}
-		}
-
-		int64_t sum_of_squares_0=0;
-		double rms_0;
-
-		sample_pointer = samples;
-		for (j=0 ; j<points_to_read ; j++) {
-			int64_t sample_point = swap_int16(*sample_pointer);
-			sum_of_squares_0 += (sample_point * sample_point);
-			sample_pointer++;
-		}
-		/* At this point we have the sums of the squares of
-		 * the sample group.  We'll do our floating point math
-		 * here to get the square root. */
-		rms_0 = sqrt((double)sum_of_squares_0 / (double)points_to_read);
-
-		printf("%u\n", (int)floor(rms_0 * scale / 32768.0));
+	sample_pointer = samples;
+	for (j=0 ; j<sample_group_size ; j++) {
+		int64_t sample_point = swap_int16(*sample_pointer);
+		sum_of_squares_0 += (sample_point * sample_point);
+		sample_pointer++;
 	}
+	/* At this point we have the sums of the squares of
+	 * the sample group.  We'll do our floating point math
+	 * here to get the square root. */
+	rms_0 = sqrt((double)sum_of_squares_0 / (double)sample_group_size);
 
-	free(samples);
+	printf("%u\n", (int)floor(rms_0 * scale / 32768.0));
 
 	return(1);
 }
