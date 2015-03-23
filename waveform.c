@@ -737,7 +737,7 @@ int waveform_2_channel_24_bit_same_endianness_mean(uint8_t *samples, int sample_
 	uint8_t *sample_pointer = samples;
 
 	int32_t sample_point_0, sample_point_1;
-	int64_t sum_of_samples_0, sum_of_samples_1;
+	int64_t sum_of_samples_0=0, sum_of_samples_1=0;
 	double mean_0, mean_1;
 
 	for (j=0 ; j<sample_group_size ; j++) {
@@ -776,7 +776,7 @@ int waveform_2_channel_24_bit_diff_endianness_mean(uint8_t *samples, int sample_
 	uint8_t *sample_pointer = samples;
 
 	int32_t sample_point_0, sample_point_1;
-	int64_t sum_of_samples_0, sum_of_samples_1;
+	int64_t sum_of_samples_0=0, sum_of_samples_1=0;
 	double mean_0, mean_1;
 
 	for (j=0 ; j<sample_group_size ; j++) {
