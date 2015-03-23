@@ -721,6 +721,84 @@ int waveform_2_channel_24_bit_diff_endianness_peak(uint8_t *samples, int sample_
 	return(1);
 }
 
+int waveform_2_channel_24_bit_same_endianness_mean(uint8_t *samples, int sample_group_size) {
+
+	/* this code is where:
+	 * machine_endianness == data_endianness
+	 * channel_count == 2
+	 * bits_per_sample ==24 
+	 * algorithm == MEAN
+	 */
+
+	/* Note that 8388608 is 2^23 */
+
+	int i, j, items_read;
+
+	uint8_t *sample_pointer = samples;
+
+	int32_t sample_point_0, sample_point_1;
+	int64_t sum_of_samples_0, sum_of_samples_1;
+	double mean_0, mean_1;
+
+	for (j=0 ; j<sample_group_size ; j++) {
+		get_unswapped_24_bit_int(sample_pointer, sample_point_0);
+		get_unswapped_24_bit_int(sample_pointer, sample_point_1);
+
+		sum_of_samples_0 += abs(sample_point_0);
+		sum_of_samples_1 += abs(sample_point_1);
+	}
+
+	if (mono_flag) {
+		mean_0 = ((double)sum_of_samples_0 + (double)sum_of_samples_1) / ((double)sample_group_size * 2.0);
+		printf("%u\n", (int)floor(mean_0 * scale / 8388608.0));
+	} else {
+		mean_0 = (double)sum_of_samples_0 / (double)sample_group_size;
+		mean_1 = (double)sum_of_samples_1 / (double)sample_group_size;
+		printf("%u,%u\n", (int)floor(mean_0 * scale / 8388608.0), (int)floor(mean_1 * scale / 8388608.0));
+	}
+
+	return(1);
+}
+
+int waveform_2_channel_24_bit_diff_endianness_mean(uint8_t *samples, int sample_group_size) {
+
+	/* this code is where:
+	 * machine_endianness != data_endianness
+	 * channel_count == 2
+	 * bits_per_sample ==24 
+	 * algorithm == MEAN
+	 */
+
+	/* Note that 8388608 is 2^23 */
+
+	int i, j, items_read;
+
+	uint8_t *sample_pointer = samples;
+
+	int32_t sample_point_0, sample_point_1;
+	int64_t sum_of_samples_0, sum_of_samples_1;
+	double mean_0, mean_1;
+
+	for (j=0 ; j<sample_group_size ; j++) {
+		get_swapped_24_bit_int(sample_pointer, sample_point_0);
+		get_swapped_24_bit_int(sample_pointer, sample_point_1);
+
+		sum_of_samples_0 += abs(sample_point_0);
+		sum_of_samples_1 += abs(sample_point_1);
+	}
+
+	if (mono_flag) {
+		mean_0 = ((double)sum_of_samples_0 + (double)sum_of_samples_1) / ((double)sample_group_size * 2.0);
+		printf("%u\n", (int)floor(mean_0 * scale / 8388608.0));
+	} else {
+		mean_0 = (double)sum_of_samples_0 / (double)sample_group_size;
+		mean_1 = (double)sum_of_samples_1 / (double)sample_group_size;
+		printf("%u,%u\n", (int)floor(mean_0 * scale / 8388608.0), (int)floor(mean_1 * scale / 8388608.0));
+	}
+
+	return(1);
+}
+
 /*
 	The following functions are dispatchers and are based on number of
 	channels and sample size.  This leaves us with 6 functions since we
@@ -917,7 +995,7 @@ int waveform_2_channel_24_bit(FILE *fd, int *sample_group_sizes, Algo_t algorith
 		} else if (algorithm == PEAK) {
 			funcptr = &waveform_2_channel_24_bit_same_endianness_peak;
 		} else if (algorithm == MEAN) {
-/*			funcptr = &waveform_2_channel_24_bit_same_endianness_mean; */
+			funcptr = &waveform_2_channel_24_bit_same_endianness_mean;
 		}
 	} else {
 		/* different endianness */
@@ -926,7 +1004,7 @@ int waveform_2_channel_24_bit(FILE *fd, int *sample_group_sizes, Algo_t algorith
 		} else if (algorithm == PEAK) {
 			funcptr = &waveform_2_channel_24_bit_diff_endianness_peak;
 		} else if (algorithm == MEAN) {
-/*			funcptr = &waveform_2_channel_24_bit_diff_endianness_mean; */
+			funcptr = &waveform_2_channel_24_bit_diff_endianness_mean;
 		}
 	}
 
