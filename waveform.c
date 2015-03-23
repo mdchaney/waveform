@@ -86,6 +86,23 @@ static inline int32_t swap_int32(int32_t val) {
 	return (val << 16) | ((val >> 16) & 0xFFFF);
 }
 
+/* macro to handle 24-bit integer - PTR is the pointer to raw data, TARGET
+   is an int32_t where we'll store the data.  PTR is assumed to be (uint8_t *).
+	Also assuming that the bit shift operator will drag the sign bit along.
+	The first two are for little-endian architectures, second two are for
+	big-endian.
+*/
+#if __BYTE_ORDER == __LITTLE_ENDIAN
+#define get_unswapped_24_bit_int(PTR, TARGET) (TARGET=0, ((uint8_t *)&TARGET)[1] = *(PTR++), ((uint8_t *)&TARGET)[2] = *(PTR++), ((uint8_t *)&TARGET)[3] = *(PTR++), (TARGET = TARGET >> 8))
+
+#define get_swapped_24_bit_int(PTR, TARGET) (TARGET=0, ((uint8_t *)&TARGET)[3] = *(PTR++), ((uint8_t *)&TARGET)[2] = *(PTR++), ((uint8_t *)&TARGET)[1] = *(PTR++), (TARGET = TARGET >> 8))
+
+#else
+#define get_unswapped_24_bit_int(PTR, TARGET) (TARGET=0, ((uint8_t *)&TARGET)[0] = *(PTR++), ((uint8_t *)&TARGET)[1] = *(PTR++), ((uint8_t *)&TARGET)[2] = *(PTR++), (TARGET = TARGET >> 8))
+
+#define get_swapped_24_bit_int(PTR, TARGET) (TARGET=0, ((uint8_t *)&TARGET)[2] = *(PTR++), ((uint8_t *)&TARGET)[1] = *(PTR++), ((uint8_t *)&TARGET)[0] = *(PTR++), (TARGET = TARGET >> 8))
+#endif
+
 /* Here's where we implement Bresenham's algorithm for line
  * drawing.  Let's assume a line in the first octant (in polar
  * coordinates the angle is 0-45 degrees) where "x" is the
@@ -628,7 +645,7 @@ int waveform_2_channel_16_bit_diff_endianness_mean(int16_t *samples, int sample_
 	These are the functions for 24-bit samples
 */
 
-int waveform_2_channel_24_bit_same_endianness_peak(int8_t *samples, int sample_group_size) {
+int waveform_2_channel_24_bit_same_endianness_peak(uint8_t *samples, int sample_group_size) {
 
 	/* this code is where:
 	 * machine_endianness == data_endianness
@@ -641,18 +658,13 @@ int waveform_2_channel_24_bit_same_endianness_peak(int8_t *samples, int sample_g
 
 	int i, j, items_read;
 
-	int8_t *sample_pointer = samples;
+	uint8_t *sample_pointer = samples;
 
-	uint64_t raw_sample_point;
 	int32_t sample_point_0, sample_point_1, peak_0=0, peak_1=0;
 
 	for (j=0 ; j<sample_group_size ; j++) {
-		raw_sample_point = *(uint64_t *)sample_pointer;
-		sample_pointer += 6;
-
-		/* get two 3-byte numbers out of the bottom 6 bytes of the 64-bit int */
-		sample_point_0 = raw_sample_point & 0x00FFFFFF;
-		sample_point_1 = (raw_sample_point >> 24) & 0x00FFFFFF;
+		get_unswapped_24_bit_int(sample_pointer, sample_point_0);
+		get_unswapped_24_bit_int(sample_pointer, sample_point_1);
 
 		sample_point_0 = abs(sample_point_0);
 		sample_point_1 = abs(sample_point_1);
@@ -671,7 +683,7 @@ int waveform_2_channel_24_bit_same_endianness_peak(int8_t *samples, int sample_g
 	return(1);
 }
 
-int waveform_2_channel_24_bit_diff_endianness_peak(int8_t *samples, int sample_group_size) {
+int waveform_2_channel_24_bit_diff_endianness_peak(uint8_t *samples, int sample_group_size) {
 
 	/* this code is where:
 	 * machine_endianness != data_endianness
@@ -684,44 +696,18 @@ int waveform_2_channel_24_bit_diff_endianness_peak(int8_t *samples, int sample_g
 
 	int i, j, items_read;
 
-	int8_t *sample_pointer = samples;
+	uint8_t *sample_pointer = samples;
 
-	uint32_t raw_sample_point;
 	int32_t sample_point_0, sample_point_1, peak_0=0, peak_1=0;
 
 	for (j=0 ; j<sample_group_size ; j++) {
-		raw_sample_point = *(uint64_t *)sample_pointer;
-		/* ugh - relying on architecture allowing unaligned access */
-		sample_pointer += 3;
+		get_swapped_24_bit_int(sample_pointer, sample_point_0);
+		get_swapped_24_bit_int(sample_pointer, sample_point_1);
 
-		/* Get two 3-byte numbers out of the top 6 bytes of the 64-bit int
-			while swapping endianness.  There's simply no good way to do this.
-			I'm praying the cpu has a 64-bit barrel shifter.
-		*/
-		sample_point_0 =
-			(((raw_sample_point & 0x000000FF) << 16) |
-			 ((raw_sample_point & 0x0000FF00) ) |
-			 ((raw_sample_point & 0x00FF0000) >> 16)) & 0x00FFFFFF;
-		/* This will pull the high-bit out over the high 8 bits.  This is a 2s complement
-			number but it's just 24 bits.  If it's negative (high bit set) then we need to
-			set the rest of the high bits above it. */
-		if (sample_point_0 & 0x800000) sample_point_0 = sample_point_0 | 0xFF000000;
 		sample_point_0 = abs(sample_point_0);
-
-		if (sample_point_0 > peak_0) peak_0 = sample_point_0;
-
-		raw_sample_point = *(uint64_t *)sample_pointer;
-		/* ugh - relying on architecture allowing unaligned access */
-		sample_pointer += 3;
-
-		sample_point_1 =
-			(((raw_sample_point & 0x000000FF) << 16) |
-			 ((raw_sample_point & 0x0000FF00) ) |
-			 ((raw_sample_point & 0x00FF0000) >> 16)) & 0x00FFFFFF;
-		if (sample_point_1 & 0x800000) sample_point_1 = sample_point_1 | 0xFF000000;
-
 		sample_point_1 = abs(sample_point_1);
 
+		if (sample_point_0 > peak_0) peak_0 = sample_point_0;
 		if (sample_point_1 > peak_1) peak_1 = sample_point_1;
 	}
 
@@ -741,7 +727,7 @@ int waveform_2_channel_24_bit_diff_endianness_peak(int8_t *samples, int sample_g
 	do 8, 16, and 24 bit samples and one or two channels.
 */
 
-int not_implemented(int8_t *samples, int sample_group_size) {
+int not_implemented(uint8_t *samples, int sample_group_size) {
 	printf("Not implemented\n");
 	abort();
 	return 0;
@@ -832,8 +818,8 @@ int waveform_1_channel_24_bit(FILE *fd, int *sample_group_sizes, Algo_t algorith
 		}
 	}
 
-	int8_t *samples;
-	samples = (int8_t *) malloc(3 * (sample_group_sizes[0]+1));  /* 1 channel, 3 byte samples */
+	uint8_t *samples;
+	samples = (uint8_t *) malloc(3 * (sample_group_sizes[0]+1));  /* 1 channel, 3 byte samples */
 
 	for (i=0 ; i<points; i++) {
 
@@ -921,7 +907,7 @@ int waveform_2_channel_24_bit(FILE *fd, int *sample_group_sizes, Algo_t algorith
 
 	int i, items_read;
 
-	int (*funcptr)(int8_t*, int);
+	int (*funcptr)(uint8_t*, int);
 
 	funcptr = &not_implemented;
 
@@ -944,8 +930,8 @@ int waveform_2_channel_24_bit(FILE *fd, int *sample_group_sizes, Algo_t algorith
 		}
 	}
 
-	int8_t *samples;
-	samples = (int8_t *) malloc(2 * 3 * (sample_group_sizes[0]+16));  /* 2 channels, 3 byte samples, plus padding */
+	uint8_t *samples;
+	samples = (uint8_t *) malloc(2 * 3 * (sample_group_sizes[0]+16));  /* 2 channels, 3 byte samples, plus padding */
 
 	for (i=0 ; i<points; i++) {
 
