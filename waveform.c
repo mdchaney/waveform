@@ -327,9 +327,7 @@ int waveform_1_channel_16_bit_same_endianness_mean(int16_t *samples, int sample_
 		sum_of_samples_0 += abs(*sample_pointer);
 		sample_pointer++;
 	}
-	/* At this point we have the sums of the squares of
-	 * the sample group.  We'll do our floating point math
-	 * here to get the square root. */
+
 	mean_0 = (double)sum_of_samples_0 / ((double)sample_group_size * 2.0);
 
 	printf("%u\n", (int)floor(mean_0 * scale / 32768.0));
@@ -357,9 +355,7 @@ int waveform_1_channel_16_bit_diff_endianness_mean(int16_t *samples, int sample_
 		sum_of_samples_0 += abs(*sample_pointer);
 		sample_pointer++;
 	}
-	/* At this point we have the sums of the squares of
-	 * the sample group.  We'll do our floating point math
-	 * here to get the square root. */
+
 	mean_0 = (double)sum_of_samples_0 / ((double)sample_group_size * 2.0);
 
 	printf("%u\n", (int)floor(mean_0 * scale / 32768.0));
@@ -561,9 +557,7 @@ int waveform_2_channel_16_bit_same_endianness_mean(int16_t *samples, int sample_
 			sum_of_samples_0 += abs(*sample_pointer);
 			sample_pointer++;
 		}
-		/* At this point we have the sums of the squares of
-		 * the sample group.  We'll do our floating point math
-		 * here to get the square root. */
+
 		mean_0 = (double)sum_of_samples_0 / ((double)sample_group_size * 2.0);
 
 		printf("%u\n", (int)floor(mean_0 * scale / 32768.0));
@@ -574,9 +568,7 @@ int waveform_2_channel_16_bit_same_endianness_mean(int16_t *samples, int sample_
 			sum_of_samples_1 += abs(*sample_pointer);
 			sample_pointer++;
 		}
-		/* At this point we have the sums of the squares of
-		 * the sample group.  We'll do our floating point math
-		 * here to get the square root. */
+
 		mean_0 = (double)sum_of_samples_0 / (double)sample_group_size;
 		mean_1 = (double)sum_of_samples_1 / (double)sample_group_size;
 
