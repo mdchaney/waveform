@@ -799,6 +799,96 @@ int waveform_2_channel_24_bit_diff_endianness_mean(uint8_t *samples, int sample_
 	return(1);
 }
 
+int waveform_2_channel_24_bit_same_endianness_rms(uint8_t *samples, int sample_group_size) {
+
+	/* this code is where:
+	 * machine_endianness == data_endianness
+	 * channel_count == 2
+	 * bits_per_sample ==24 
+	 * algorithm == RMS
+	 */
+
+	/* Note that 8388608 is 2^23 */
+
+	int i, j, items_read;
+
+	uint8_t *sample_pointer = samples;
+
+	int32_t sample_point;
+	int64_t sample_point_64;
+	int64_t sum_of_squares_0=0, sum_of_squares_1=0;
+	double rms_0, rms_1;
+
+	for (j=0 ; j<sample_group_size ; j++) {
+		get_unswapped_24_bit_int(sample_pointer, sample_point);
+		sample_point_64 = sample_point;
+		sum_of_squares_0 += (sample_point_64 * sample_point_64);
+		get_unswapped_24_bit_int(sample_pointer, sample_point);
+		sample_point_64 = sample_point;
+		sum_of_squares_1 += (sample_point_64 * sample_point_64);
+	}
+
+	/* At this point we have the sums of the squares of
+	 * the sample group.  We'll do our floating point math
+	 * here to get the square root. */
+
+	if (mono_flag) {
+		rms_0 = sqrt((double)(sum_of_squares_0 + sum_of_squares_1) / ((double)sample_group_size * 2.0));
+		printf("%u\n", (int)floor(rms_0 * scale / 8388608.0));
+	} else {
+		rms_0 = sqrt((double)sum_of_squares_0 / (double)sample_group_size);
+		rms_1 = sqrt((double)sum_of_squares_1 / (double)sample_group_size);
+		printf("%u,%u\n", (int)floor(rms_0 * scale / 8388608.0), (int)floor(rms_1 * scale / 8388608.0));
+	}
+
+	return(1);
+}
+
+int waveform_2_channel_24_bit_diff_endianness_rms(uint8_t *samples, int sample_group_size) {
+
+	/* this code is where:
+	 * machine_endianness != data_endianness
+	 * channel_count == 2
+	 * bits_per_sample ==24 
+	 * algorithm == RMS
+	 */
+
+	/* Note that 8388608 is 2^23 */
+
+	int i, j, items_read;
+
+	uint8_t *sample_pointer = samples;
+
+	int32_t sample_point;
+	int64_t sample_point_64;
+	int64_t sum_of_squares_0=0, sum_of_squares_1=0;
+	double rms_0, rms_1;
+
+	for (j=0 ; j<sample_group_size ; j++) {
+		get_swapped_24_bit_int(sample_pointer, sample_point);
+		sample_point_64 = sample_point;
+		sum_of_squares_0 += (sample_point_64 * sample_point_64);
+		get_swapped_24_bit_int(sample_pointer, sample_point);
+		sample_point_64 = sample_point;
+		sum_of_squares_1 += (sample_point_64 * sample_point_64);
+	}
+
+	/* At this point we have the sums of the squares of
+	 * the sample group.  We'll do our floating point math
+	 * here to get the square root. */
+
+	if (mono_flag) {
+		rms_0 = sqrt((double)(sum_of_squares_0 + sum_of_squares_1) / ((double)sample_group_size * 2.0));
+		printf("%u\n", (int)floor(rms_0 * scale / 8388608.0));
+	} else {
+		rms_0 = sqrt((double)sum_of_squares_0 / (double)sample_group_size);
+		rms_1 = sqrt((double)sum_of_squares_1 / (double)sample_group_size);
+		printf("%u,%u\n", (int)floor(rms_0 * scale / 8388608.0), (int)floor(rms_1 * scale / 8388608.0));
+	}
+
+	return(1);
+}
+
 /*
 	The following functions are dispatchers and are based on number of
 	channels and sample size.  This leaves us with 6 functions since we
@@ -991,7 +1081,7 @@ int waveform_2_channel_24_bit(FILE *fd, int *sample_group_sizes, Algo_t algorith
 
 	if (machine_endianness == data_endianness) {
 		if (algorithm == RMS) {
-/*			funcptr = &waveform_2_channel_24_bit_same_endianness_rms; */
+			funcptr = &waveform_2_channel_24_bit_same_endianness_rms;
 		} else if (algorithm == PEAK) {
 			funcptr = &waveform_2_channel_24_bit_same_endianness_peak;
 		} else if (algorithm == MEAN) {
@@ -1000,7 +1090,7 @@ int waveform_2_channel_24_bit(FILE *fd, int *sample_group_sizes, Algo_t algorith
 	} else {
 		/* different endianness */
 		if (algorithm == RMS) {
-/*			funcptr = &waveform_2_channel_24_bit_diff_endianness_rms; */
+			funcptr = &waveform_2_channel_24_bit_diff_endianness_rms;
 		} else if (algorithm == PEAK) {
 			funcptr = &waveform_2_channel_24_bit_diff_endianness_peak;
 		} else if (algorithm == MEAN) {
