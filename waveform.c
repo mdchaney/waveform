@@ -749,7 +749,7 @@ int waveform_2_channel_24_bit_same_endianness_mean(uint8_t *samples, int sample_
 	}
 
 	if (mono_flag) {
-		mean_0 = ((double)sum_of_samples_0 + (double)sum_of_samples_1) / ((double)sample_group_size * 2.0);
+		mean_0 = (double)(sum_of_samples_0 + sum_of_samples_1) / ((double)sample_group_size * 2.0);
 		printf("%u\n", (int)floor(mean_0 * scale / 8388608.0));
 	} else {
 		mean_0 = (double)sum_of_samples_0 / (double)sample_group_size;
@@ -788,7 +788,7 @@ int waveform_2_channel_24_bit_diff_endianness_mean(uint8_t *samples, int sample_
 	}
 
 	if (mono_flag) {
-		mean_0 = ((double)sum_of_samples_0 + (double)sum_of_samples_1) / ((double)sample_group_size * 2.0);
+		mean_0 = (double)(sum_of_samples_0 + sum_of_samples_1) / ((double)sample_group_size * 2.0);
 		printf("%u\n", (int)floor(mean_0 * scale / 8388608.0));
 	} else {
 		mean_0 = (double)sum_of_samples_0 / (double)sample_group_size;
