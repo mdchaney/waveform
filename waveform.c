@@ -981,7 +981,7 @@ int waveform_2_channel_24_bit(FILE *fd, int *sample_group_sizes, Algo_t algorith
 
 /*
   These are the second level dispatchers which are based only on
-  channel count.
+  sample size.
 */
 
 int waveform_1_channel(FILE *fd, int *sample_group_sizes, int bits_per_sample, Algo_t algorithm, Endianness_t machine_endianness, Endianness_t data_endianness, Signing_t file_signing) {
