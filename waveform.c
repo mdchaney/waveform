@@ -53,6 +53,7 @@ static int use_peak;
 static int use_mean;
 static int use_rms;
 
+typedef enum { SIGNED, UNSIGNED } Signing_t;
 typedef enum { BIG, LITTLE, MIXED } Endianness_t;
 typedef enum { RIFF_FILE, FORM_FILE } FileFormat_t;
 typedef enum { WAVE_FILE, AIFF_FILE, AIFC_FILE } AudioFormat_t;
@@ -754,7 +755,7 @@ int not_implemented(int8_t *samples, int sample_group_size) {
 	return 0;
 }
 
-int waveform_1_channel_8_bit(FILE *fd, int *sample_group_sizes, Algo_t algorithm, Endianness_t machine_endianness, Endianness_t data_endianness) {
+int waveform_1_channel_8_bit(FILE *fd, int *sample_group_sizes, Algo_t algorithm, Endianness_t machine_endianness, Signing_t file_signing) {
 	printf("Single channel 8 bit not implemented\n");
 	abort();
 	return 0;
@@ -866,7 +867,7 @@ int waveform_1_channel_24_bit(FILE *fd, int *sample_group_sizes, Algo_t algorith
 	return(1);
 }
 
-int waveform_2_channel_8_bit(FILE *fd, int *sample_group_sizes, Algo_t algorithm, Endianness_t machine_endianness, Endianness_t data_endianness) {
+int waveform_2_channel_8_bit(FILE *fd, int *sample_group_sizes, Algo_t algorithm, Endianness_t machine_endianness, Signing_t file_signing) {
 	printf("Dual channel 8 bit not implemented\n");
 	abort();
 	return 0;
@@ -983,9 +984,9 @@ int waveform_2_channel_24_bit(FILE *fd, int *sample_group_sizes, Algo_t algorith
   channel count.
 */
 
-int waveform_1_channel(FILE *fd, int *sample_group_sizes, int bits_per_sample, Algo_t algorithm, Endianness_t machine_endianness, Endianness_t data_endianness) {
+int waveform_1_channel(FILE *fd, int *sample_group_sizes, int bits_per_sample, Algo_t algorithm, Endianness_t machine_endianness, Endianness_t data_endianness, Signing_t file_signing) {
 	if (bits_per_sample == 8) {
-		waveform_1_channel_8_bit(fd, sample_group_sizes, algorithm, machine_endianness, data_endianness);
+		waveform_1_channel_8_bit(fd, sample_group_sizes, algorithm, machine_endianness, file_signing);
 	} else if (bits_per_sample == 16) {
 		waveform_1_channel_16_bit(fd, sample_group_sizes, algorithm, machine_endianness, data_endianness);
 	} else if (bits_per_sample == 24) {
@@ -994,9 +995,9 @@ int waveform_1_channel(FILE *fd, int *sample_group_sizes, int bits_per_sample, A
 	return 0;
 }
 
-int waveform_2_channel(FILE *fd, int *sample_group_sizes, int bits_per_sample, Algo_t algorithm, Endianness_t machine_endianness, Endianness_t data_endianness) {
+int waveform_2_channel(FILE *fd, int *sample_group_sizes, int bits_per_sample, Algo_t algorithm, Endianness_t machine_endianness, Endianness_t data_endianness, Signing_t file_signing) {
 	if (bits_per_sample == 8) {
-		waveform_2_channel_8_bit(fd, sample_group_sizes, algorithm, machine_endianness, data_endianness);
+		waveform_2_channel_8_bit(fd, sample_group_sizes, algorithm, machine_endianness, file_signing);
 	} else if (bits_per_sample == 16) {
 		waveform_2_channel_16_bit(fd, sample_group_sizes, algorithm, machine_endianness, data_endianness);
 	} else if (bits_per_sample == 24) {
@@ -1009,14 +1010,14 @@ int waveform_2_channel(FILE *fd, int *sample_group_sizes, int bits_per_sample, A
   This is the top level dispatcher.  It will dispatch based only on
   channel count.
 */
-int calculate_waveform(FILE *fd, int sample_count, int channel_count, int bits_per_sample, Algo_t algorithm, Endianness_t machine_endianness, Endianness_t data_endianness) {
+int calculate_waveform(FILE *fd, int sample_count, int channel_count, int bits_per_sample, Algo_t algorithm, Endianness_t machine_endianness, Endianness_t data_endianness, Signing_t file_signing) {
 
 	int* sample_group_sizes = get_sample_group_sizes(sample_count, points);
 
 	if (channel_count == 1) {
-		return waveform_1_channel(fd, sample_group_sizes, bits_per_sample, algorithm, machine_endianness, data_endianness);
+		return waveform_1_channel(fd, sample_group_sizes, bits_per_sample, algorithm, machine_endianness, data_endianness, file_signing);
 	} else if (channel_count == 2) {
-		return waveform_2_channel(fd, sample_group_sizes, bits_per_sample, algorithm, machine_endianness, data_endianness);
+		return waveform_2_channel(fd, sample_group_sizes, bits_per_sample, algorithm, machine_endianness, data_endianness, file_signing);
 	}
 
 	free(sample_group_sizes);
@@ -1189,6 +1190,7 @@ int main(int argc, char **argv) {
 		}
 	}
 
+	Signing_t file_signing;
 	Endianness_t machine_endianness, file_endianness, data_endianness;
 
 	uint32_t checker=0x01234567;
@@ -1296,9 +1298,11 @@ int main(int argc, char **argv) {
 		if (file_format == FORM_FILE) {
 			if (debug_flag) fprintf(stderr, "FORM file format\n");
 			file_endianness = BIG;
+			file_signing = SIGNED;
 		} else if (file_format == RIFF_FILE) {
 			if (debug_flag) fprintf(stderr, "RIFF file format\n");
 			file_endianness = LITTLE;
+			/* file signing depends on sample size */
 		} else {
 			if (debug_flag) fprintf(stderr, "Confusion in file format\n");
 			exit(1);
@@ -1448,10 +1452,16 @@ int main(int argc, char **argv) {
 				bits_per_sample = (machine_endianness != file_endianness ? swap_int16(fmt_chunk.bits_per_sample) : fmt_chunk.bits_per_sample);
 	
 				sample_rate = (machine_endianness != file_endianness ? swap_int32(fmt_chunk.sample_rate) : fmt_chunk.sample_rate);
+
+				/* this is a WAV file, so we set the signed/unsigned flag here */
+				file_signing = (bits_per_sample == 8 ? UNSIGNED : SIGNED);
 	
-				if (debug_flag) fprintf(stderr, "Audio Format: %d, Channel Count: %d, Block Align: %d, Bits Per Sample: %d, Sample Rate: %d\n",
-					audio_format, channel_count, block_align, bits_per_sample, sample_rate);
-	
+				if (debug_flag) {
+					fprintf(stderr, "Audio Format: %d, Channel Count: %d, Block Align: %d, Bits Per Sample: %d, Sample Rate: %d, Data Format: ",
+						audio_format, channel_count, block_align, bits_per_sample, sample_rate);
+					fprintf(stderr, "%s\n", (file_signing == SIGNED ? "Signed" : "Unsigned"));
+				}
+
 				chunk_leftover = 0;
 	
 			} else if (strncmp(chunk_header.chunk_type, "data", 4) == 0) {
@@ -1462,7 +1472,7 @@ int main(int argc, char **argv) {
 	
 				if (debug_flag) fprintf(stderr, "Sample Count: %d\n", sample_count);
 	
-				calculate_waveform(stdin, sample_count, channel_count, bits_per_sample, algorithm, machine_endianness, data_endianness);
+				calculate_waveform(stdin, sample_count, channel_count, bits_per_sample, algorithm, machine_endianness, data_endianness, file_signing);
 	
 			} else if (strncmp(chunk_header.chunk_type, "COMM", 4) == 0) {
 				if (debug_flag) fprintf(stderr, "Found COMM chunk with length %d\n", chunk_length);
@@ -1527,7 +1537,7 @@ int main(int argc, char **argv) {
 					fseek(stdin, ssnd_offset, SEEK_CUR);
 				}
 	
-				calculate_waveform(stdin, sample_count, channel_count, bits_per_sample, algorithm, machine_endianness, data_endianness);
+				calculate_waveform(stdin, sample_count, channel_count, bits_per_sample, algorithm, machine_endianness, data_endianness, file_signing);
 	
 				chunk_leftover = 0;
 			}
