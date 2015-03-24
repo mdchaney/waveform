@@ -1,6 +1,6 @@
 waveform
 
-Copyright 2014 Michael Chaney Consulting Corporation, all rights reserved
+Copyright 2014, 2015 Michael Chaney Consulting Corporation, all rights reserved
 
 Released under the terms of the MIT or GPLv2 license.
 
@@ -9,15 +9,16 @@ WAVE file.  It is optimized for speed in probably the best way possible
 on a modern CPU architecture: minimum of branching inside of loops.
 That means that I have entire chunks of code copied verbatim except for
 a few different lines of code to handle the dirty work of computing the
-numbers.
+numbers.  The inner processing loops contain no branching unless there
+is absolutely no other way to accomplish the computation.
 
 The program is called like this:
 
 waveform [--mean|--peak|--rms] [--mono] [--points x] [--scale y] [filename]
 
 The program will output a set of integers (number specified by "points
-parameter, default of 1000), one or two on each line (comma
-separated for two numbers) that vary from "0" to "scale" (defaults to
+parameter, default of 1000), one or two on each line (comma separated
+for two numbers) that vary from "0" to "scale", inclusive (defaults to
 "255").  The numbers represent the result of a set of sample points run
 through an algorithm.
 
@@ -61,17 +62,15 @@ reading the data is quite efficient and will read the entire data set
 into memory while only requiring one extra buffer to hold enough samples
 for one output data point.  On modern hardware that should be fine.
 
-NOTE
+SUPPORTED FILE FORMATS:
 
-As of right now this will only work on 2-channel 16-bit sample files.
-It is fairly trivial to copy/modify the code to handle 1-channel and
-8-bit files.  There are 6 file handling routines now - all three
-algorithms (peak, rms, and mean) in two sets, one set for
-same endianness and one for different endianness.  Those need to be
-copied three more times to handle "8-bit mono", "16-bit mono", and
-"8-bit stereo".  It would also be possible to add 24-bit, 32-bit, and
-more than two channels.  As you can see the code would grow quickly and
-at some point it might make sense to create the routines via macros.
+AIFF and WAV
+Apple AIFC with "sowt" compression (regular PCM in little-endian format)
+
+16 or 24 bit samples
+1 or 2 channel
+
+Code is forthcoming to handle 8-bit samples and possibly 32-bit.
 
 It would be possible to simplify the code dramatically and have one main
 processing loop.  However, such code would have a lot of branches inside
@@ -80,10 +79,9 @@ it to see what impact it would have.  My goal on this project is raw
 speed at the expense of everything else - I don't mind if I have code
 that is replicated save for a few minor differences.
 
-I have a Ruby version of this which outputs an actual PNG and takes
-around 3 minutes to compute a wave form.  This program outputs the same
-information in a text format and takes around 5/100ths of a second for
-my files.  The text format is more useful for me as I can easily
-create the PNG from that if I want, with that taking no more than
-another fraction of a second.  Ruby totally rocks, just not for this
-sort of heavy computation.
+NOTE:
+
+This should work on big-endian machines but I haven't tested it on one.
+
+There is a lot of 64-bit math in here, it will run slower on a 32-bit
+processor.
