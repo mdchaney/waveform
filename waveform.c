@@ -1842,9 +1842,12 @@ int main(int argc, char **argv) {
 				bits_per_sample = (machine_endianness != file_endianness ? swap_int16(comm_chunk.bits_per_sample) : comm_chunk.bits_per_sample);
 				sample_count = (machine_endianness != file_endianness ? swap_uint32(comm_chunk.sample_count) : comm_chunk.sample_count);
 	
-				if (debug_flag) fprintf(stderr, "Channel Count: %d, Bits Per Sample: %d, Sample Count: %d\n",
-					channel_count, bits_per_sample, sample_count);
-	
+				if (debug_flag) {
+					fprintf(stderr, "Channel Count: %d, Bits Per Sample: %d, Sample Count: %d, Data Format: ",
+						channel_count, bits_per_sample, sample_count);
+					fprintf(stderr, "%s\n", (file_signing == SIGNED ? "Signed" : "Unsigned"));
+				}
+
 				chunk_leftover = 0;
 	
 			} else if (strncmp(chunk_header.chunk_type, "SSND", 4) == 0) {
