@@ -200,6 +200,255 @@ int* get_sample_group_sizes(int sample_count, int points) {
 }
 
 /*
+	This group of functions handles 8-bit samples.  They can be:
+	1. 1 or 2 channel
+	2. signed or unsigned (WAV uses unsigned ints offset by 128)
+	3. rms, peak, or mean
+	There are 12 functions in all.
+*/
+
+int waveform_2_channel_8_bit_peak(int8_t *samples, int sample_group_size, Signing_t file_signing) {
+
+	/* this code is where:
+	 * data format == signed/unsigned (see file_signing)
+	 * channel_count == 2
+	 * bits_per_sample == 8
+	 * algorithm == PEAK
+	 */
+
+	int i, j, items_read;
+
+	int16_t sample_point, peak_0=0, peak_1=0;
+
+	if (file_signing == SIGNED) {
+		int8_t *sample_pointer = samples;
+		for (j=0 ; j<sample_group_size ; j++) {
+			sample_point = abs(*sample_pointer);
+			if (sample_point > peak_0) peak_0 = sample_point;
+			sample_pointer++;
+			sample_point = abs(*sample_pointer);
+			if (sample_point > peak_1) peak_1 = sample_point;
+			sample_pointer++;
+		}
+	} else {
+		uint8_t *u_sample_pointer = (uint8_t *)samples;
+		for (j=0 ; j<sample_group_size ; j++) {
+			sample_point = abs((int16_t)*u_sample_pointer - 128);
+			if (sample_point > peak_0) peak_0 = sample_point;
+			u_sample_pointer++;
+			sample_point = abs((int16_t)*u_sample_pointer - 128);
+			if (sample_point > peak_1) peak_1 = sample_point;
+			u_sample_pointer++;
+		}
+	}
+
+	if (mono_flag) {
+		if (peak_1 > peak_0) { peak_0 = peak_1; }
+		printf("%u\n", (int)floor((double)peak_0 * scale / 128.0));
+	} else {
+		printf("%u,%u\n", (int)floor((double)peak_0 * scale / 128.0), (int)floor((double)peak_1 * scale / 128.0));
+	}
+
+	return(1);
+}
+
+int waveform_1_channel_8_bit_peak(int8_t *samples, int sample_group_size, Signing_t file_signing) {
+
+	/* this code is where:
+	 * data format == signed/unsigned (see file_signing)
+	 * channel_count == 1
+	 * bits_per_sample == 8
+	 * algorithm == PEAK
+	 */
+
+	int i, j, items_read;
+
+	int16_t sample_point, peak_0=0;
+
+	if (file_signing == SIGNED) {
+		int8_t *sample_pointer = samples;
+		for (j=0 ; j<sample_group_size ; j++) {
+			sample_point = abs(*sample_pointer);
+			if (sample_point > peak_0) peak_0 = sample_point;
+			sample_pointer++;
+		}
+	} else {
+		uint8_t *u_sample_pointer = (uint8_t*)samples;
+		for (j=0 ; j<sample_group_size ; j++) {
+			sample_point = abs((int16_t)*u_sample_pointer - 128);
+			if (sample_point > peak_0) peak_0 = sample_point;
+			u_sample_pointer++;
+		}
+	}
+
+	printf("%u\n", (int)floor((double)peak_0 * scale / 128.0));
+
+	return(1);
+}
+
+int waveform_2_channel_8_bit_mean(int8_t *samples, int sample_group_size, Signing_t file_signing) {
+
+	/* this code is where:
+	 * data format == signed/unsigned (see file_signing)
+	 * channel_count == 2
+	 * bits_per_sample == 8
+	 * algorithm == MEAN
+	 */
+
+	int i, j, items_read;
+
+	int64_t sample_point, sum_of_samples_0=0, sum_of_samples_1=0;
+	double mean_0, mean_1;
+
+	if (file_signing == SIGNED) {
+		int8_t *sample_pointer = samples;
+		for (j=0 ; j<sample_group_size ; j++) {
+			sum_of_samples_0 += abs((int64_t)*sample_pointer);
+			sample_pointer++;
+			sum_of_samples_1 += abs((int64_t)*sample_pointer);
+			sample_pointer++;
+		}
+	} else {
+		uint8_t *u_sample_pointer = (uint8_t*)samples;
+		for (j=0 ; j<sample_group_size ; j++) {
+			sum_of_samples_0 += abs((int64_t)*u_sample_pointer - 128);
+			u_sample_pointer++;
+			sum_of_samples_1 += abs((int64_t)*u_sample_pointer - 128);
+			u_sample_pointer++;
+		}
+	}
+
+	if (mono_flag) {
+		mean_0 = (double)(sum_of_samples_0 + sum_of_samples_1) / ((double)sample_group_size * 2.0);
+		printf("%u\n", (int)floor((double)mean_0 * scale / 128.0));
+	} else {
+		mean_0 = (double)sum_of_samples_0 / (double)sample_group_size;
+		mean_1 = (double)sum_of_samples_1 / (double)sample_group_size;
+		printf("%u,%u\n", (int)floor((double)mean_0 * scale / 128.0), (int)floor((double)mean_1 * scale / 128.0));
+	}
+
+	return(1);
+}
+
+int waveform_1_channel_8_bit_mean(int8_t *samples, int sample_group_size, Signing_t file_signing) {
+
+	/* this code is where:
+	 * data format == signed/unsigned (see file_signing)
+	 * channel_count == 1
+	 * bits_per_sample == 8
+	 * algorithm == MEAN
+	 */
+
+	int i, j, items_read;
+
+	int64_t sum_of_samples_0=0;
+	double mean_0;
+
+	if (file_signing == SIGNED) {
+		int8_t *sample_pointer = samples;
+		for (j=0 ; j<sample_group_size ; j++) {
+			sum_of_samples_0 += abs((int64_t)*sample_pointer);
+			sample_pointer++;
+		}
+	} else {
+		uint8_t *u_sample_pointer = (uint8_t*)samples;
+		for (j=0 ; j<sample_group_size ; j++) {
+			sum_of_samples_0 += abs((int64_t)*u_sample_pointer - 128);
+			u_sample_pointer++;
+		}
+	}
+
+	mean_0 = (double)sum_of_samples_0 / (double)sample_group_size;
+	printf("%u\n", (int)floor((double)mean_0 * scale / 128.0));
+
+	return(1);
+}
+
+int waveform_2_channel_8_bit_rms(int8_t *samples, int sample_group_size, Signing_t file_signing) {
+
+	/* this code is where:
+	 * data format == signed/unsigned (see file_signing)
+	 * channel_count == 2
+	 * bits_per_sample == 8
+	 * algorithm == RMS
+	 */
+
+	int i, j, items_read;
+
+	int64_t sample_point_64, sum_of_squares_0=0, sum_of_squares_1=0;
+	double rms_0, rms_1;
+
+	if (file_signing == SIGNED) {
+		int8_t *sample_pointer = samples;
+		for (j=0 ; j<sample_group_size ; j++) {
+			sample_point_64 = (int64_t)*sample_pointer;
+			sum_of_squares_0 += (sample_point_64 * sample_point_64);
+			sample_pointer++;
+			sample_point_64 = (int64_t)*sample_pointer;
+			sum_of_squares_1 += (sample_point_64 * sample_point_64);
+			sample_pointer++;
+		}
+	} else {
+		uint8_t *u_sample_pointer = (uint8_t *)samples;
+		for (j=0 ; j<sample_group_size ; j++) {
+			sample_point_64 = (int64_t)*u_sample_pointer - 128;
+			sum_of_squares_0 += (sample_point_64 * sample_point_64);
+			u_sample_pointer++;
+			sample_point_64 = (int64_t)*u_sample_pointer - 128;
+			sum_of_squares_1 += (sample_point_64 * sample_point_64);
+			u_sample_pointer++;
+		}
+	}
+
+	if (mono_flag) {
+		rms_0 = sqrt((double)(sum_of_squares_0 + sum_of_squares_1) / ((double)sample_group_size * 2.0));
+		printf("%u\n", (int)floor((double)rms_0 * scale / 128.0));
+	} else {
+		rms_0 = sqrt((double)sum_of_squares_0 / (double)sample_group_size);
+		rms_1 = sqrt((double)sum_of_squares_1 / (double)sample_group_size);
+		printf("%u,%u\n", (int)floor((double)rms_0 * scale / 128.0), (int)floor((double)rms_1 * scale / 128.0));
+	}
+
+	return(1);
+}
+
+int waveform_1_channel_8_bit_rms(int8_t *samples, int sample_group_size, Signing_t file_signing) {
+
+	/* this code is where:
+	 * data format == signed/unsigned (see file_signing)
+	 * channel_count == 1
+	 * bits_per_sample == 8
+	 * algorithm == RMS
+	 */
+
+	int i, j, items_read;
+
+	int64_t sample_point_64, sum_of_squares_0=0;
+	double rms_0;
+
+	if (file_signing == SIGNED) {
+		int8_t *sample_pointer = samples;
+		for (j=0 ; j<sample_group_size ; j++) {
+			sample_point_64 = (int64_t)*sample_pointer;
+			sum_of_squares_0 += (sample_point_64 * sample_point_64);
+			sample_pointer++;
+		}
+	} else {
+		uint8_t *u_sample_pointer = (uint8_t*)samples;
+		for (j=0 ; j<sample_group_size ; j++) {
+			sample_point_64 = (int64_t)*u_sample_pointer - 128;
+			sum_of_squares_0 += (sample_point_64 * sample_point_64);
+			u_sample_pointer++;
+		}
+	}
+
+	rms_0 = sqrt((double)sum_of_squares_0 / (double)sample_group_size);
+	printf("%u\n", (int)floor((double)rms_0 * scale / 128.0));
+
+	return(1);
+}
+
+/*
 	This group of functions handles 16-bit samples.  They can be:
 	1. 1 or 2 channel
 	2. same or different endianness
@@ -1095,10 +1344,44 @@ int not_implemented(uint8_t *samples, int sample_group_size) {
 	return 0;
 }
 
-int waveform_1_channel_8_bit(FILE *fd, int *sample_group_sizes, Algo_t algorithm, Endianness_t machine_endianness, Signing_t file_signing) {
-	printf("Single channel 8 bit not implemented\n");
-	abort();
-	return 0;
+int waveform_1_channel_8_bit(FILE *fd, int *sample_group_sizes, Algo_t algorithm, Signing_t file_signing) {
+	int i, items_read;
+
+	int (*funcptr)(int8_t*, int, Signing_t);
+
+	if (algorithm == RMS) {
+		funcptr = &waveform_1_channel_8_bit_rms;
+	} else if (algorithm == PEAK) {
+		funcptr = &waveform_1_channel_8_bit_peak;
+	} else if (algorithm == MEAN) {
+		funcptr = &waveform_1_channel_8_bit_mean;
+	}
+
+	int8_t *samples;
+	samples = (int8_t *) malloc(sample_group_sizes[0]+1);  /* 1 channel, 1 byte samples */
+
+	for (i=0 ; i<points; i++) {
+
+		int points_to_read = sample_group_sizes[i];
+
+		items_read = fread(samples, 1, points_to_read, fd);
+
+		if (items_read != points_to_read) {
+			if (feof(fd)) {
+				fprintf(stderr, "Unexpected EOF\n");
+				exit(1);
+			} else {
+				fprintf(stderr, "Chunk unreadable\n");
+				exit(1);
+			}
+		}
+
+		(*funcptr)(samples, points_to_read, file_signing);
+	}
+
+	free(samples);
+
+	return(1);
 }
 
 int waveform_1_channel_16_bit(FILE *fd, int *sample_group_sizes, Algo_t algorithm, Endianness_t machine_endianness, Endianness_t data_endianness) {
@@ -1207,10 +1490,45 @@ int waveform_1_channel_24_bit(FILE *fd, int *sample_group_sizes, Algo_t algorith
 	return(1);
 }
 
-int waveform_2_channel_8_bit(FILE *fd, int *sample_group_sizes, Algo_t algorithm, Endianness_t machine_endianness, Signing_t file_signing) {
-	printf("Dual channel 8 bit not implemented\n");
-	abort();
-	return 0;
+int waveform_2_channel_8_bit(FILE *fd, int *sample_group_sizes, Algo_t algorithm, Signing_t file_signing) {
+
+	int i, items_read;
+
+	int (*funcptr)(int8_t*, int, Signing_t);
+
+	if (algorithm == RMS) {
+		funcptr = &waveform_2_channel_8_bit_rms;
+	} else if (algorithm == PEAK) {
+		funcptr = &waveform_2_channel_8_bit_peak;
+	} else if (algorithm == MEAN) {
+		funcptr = &waveform_2_channel_8_bit_mean;
+	}
+
+	int8_t *samples;
+	samples = (int8_t *) malloc(2 * (sample_group_sizes[0]+1));  /* 2 channels, 1 byte samples */
+
+	for (i=0 ; i<points; i++) {
+
+		int points_to_read = sample_group_sizes[i];
+
+		items_read = fread(samples, 2, points_to_read, fd);
+
+		if (items_read != points_to_read) {
+			if (feof(fd)) {
+				fprintf(stderr, "Unexpected EOF\n");
+				exit(1);
+			} else {
+				fprintf(stderr, "Chunk unreadable\n");
+				exit(1);
+			}
+		}
+
+		(*funcptr)(samples, points_to_read, file_signing);
+	}
+
+	free(samples);
+
+	return(1);
 }
 
 int waveform_2_channel_16_bit(FILE *fd, int *sample_group_sizes, Algo_t algorithm, Endianness_t machine_endianness, Endianness_t data_endianness) {
@@ -1326,7 +1644,7 @@ int waveform_2_channel_24_bit(FILE *fd, int *sample_group_sizes, Algo_t algorith
 
 int waveform_1_channel(FILE *fd, int *sample_group_sizes, int bits_per_sample, Algo_t algorithm, Endianness_t machine_endianness, Endianness_t data_endianness, Signing_t file_signing) {
 	if (bits_per_sample == 8) {
-		waveform_1_channel_8_bit(fd, sample_group_sizes, algorithm, machine_endianness, file_signing);
+		waveform_1_channel_8_bit(fd, sample_group_sizes, algorithm, file_signing);
 	} else if (bits_per_sample == 16) {
 		waveform_1_channel_16_bit(fd, sample_group_sizes, algorithm, machine_endianness, data_endianness);
 	} else if (bits_per_sample == 24) {
@@ -1337,7 +1655,7 @@ int waveform_1_channel(FILE *fd, int *sample_group_sizes, int bits_per_sample, A
 
 int waveform_2_channel(FILE *fd, int *sample_group_sizes, int bits_per_sample, Algo_t algorithm, Endianness_t machine_endianness, Endianness_t data_endianness, Signing_t file_signing) {
 	if (bits_per_sample == 8) {
-		waveform_2_channel_8_bit(fd, sample_group_sizes, algorithm, machine_endianness, file_signing);
+		waveform_2_channel_8_bit(fd, sample_group_sizes, algorithm, file_signing);
 	} else if (bits_per_sample == 16) {
 		waveform_2_channel_16_bit(fd, sample_group_sizes, algorithm, machine_endianness, data_endianness);
 	} else if (bits_per_sample == 24) {
