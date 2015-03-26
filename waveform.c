@@ -1163,6 +1163,8 @@ int waveform_1_channel_8_bit(FILE *fd, int *sample_group_sizes, Algo_t algorithm
 
 	int (*funcptr)(int8_t*, int, Signing_t);
 
+	funcptr = &not_implemented;
+
 	if (algorithm == RMS) {
 		funcptr = &waveform_1_channel_8_bit_rms;
 	} else if (algorithm == PEAK) {
@@ -1204,6 +1206,8 @@ int waveform_1_channel_16_bit(FILE *fd, int *sample_group_sizes, Algo_t algorith
 
 	int (*funcptr)(int16_t*, int, int);
 
+	funcptr = &not_implemented;
+
 	if (algorithm == RMS) {
 		funcptr = &waveform_1_channel_16_bit_rms;
 	} else if (algorithm == PEAK) {
@@ -1243,7 +1247,7 @@ int waveform_1_channel_24_bit(FILE *fd, int *sample_group_sizes, Algo_t algorith
 
 	int i, items_read;
 
-	int (*funcptr)(uint8_t*, int);
+	int (*funcptr)(uint8_t*, int, int);
 
 	funcptr = &not_implemented;
 
@@ -1299,6 +1303,8 @@ int waveform_2_channel_8_bit(FILE *fd, int *sample_group_sizes, Algo_t algorithm
 
 	int (*funcptr)(int8_t*, int, Signing_t);
 
+	funcptr = &not_implemented;
+
 	if (algorithm == RMS) {
 		funcptr = &waveform_2_channel_8_bit_rms;
 	} else if (algorithm == PEAK) {
@@ -1340,6 +1346,8 @@ int waveform_2_channel_16_bit(FILE *fd, int *sample_group_sizes, Algo_t algorith
 
 	int (*funcptr)(int16_t*, int, int);
 
+	funcptr = &not_implemented;
+
 	if (algorithm == RMS) {
 		funcptr = &waveform_2_channel_16_bit_rms;
 	} else if (algorithm == PEAK) {
@@ -1379,7 +1387,7 @@ int waveform_2_channel_24_bit(FILE *fd, int *sample_group_sizes, Algo_t algorith
 
 	int i, items_read;
 
-	int (*funcptr)(uint8_t*, int);
+	int (*funcptr)(uint8_t*, int, int);
 
 	funcptr = &not_implemented;
 
