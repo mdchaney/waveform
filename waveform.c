@@ -217,7 +217,7 @@ int waveform_1_channel_8_bit_peak(int8_t *samples, int sample_group_size, Signin
 	 * algorithm == PEAK
 	 */
 
-	int i, j;
+	int j;
 
 	int16_t sample_point, peak_0=0;
 
@@ -251,7 +251,7 @@ int waveform_2_channel_8_bit_peak(int8_t *samples, int sample_group_size, Signin
 	 * algorithm == PEAK
 	 */
 
-	int i, j;
+	int j;
 
 	int16_t sample_point, peak_0=0, peak_1=0;
 
@@ -296,7 +296,7 @@ int waveform_1_channel_8_bit_mean(int8_t *samples, int sample_group_size, Signin
 	 * algorithm == MEAN
 	 */
 
-	int i, j;
+	int j;
 
 	int64_t sum_of_samples_0=0;
 	double mean_0;
@@ -330,7 +330,7 @@ int waveform_2_channel_8_bit_mean(int8_t *samples, int sample_group_size, Signin
 	 * algorithm == MEAN
 	 */
 
-	int i, j;
+	int j;
 
 	int64_t sample_point, sum_of_samples_0=0, sum_of_samples_1=0;
 	double mean_0, mean_1;
@@ -374,7 +374,7 @@ int waveform_1_channel_8_bit_rms(int8_t *samples, int sample_group_size, Signing
 	 * algorithm == RMS
 	 */
 
-	int i, j;
+	int j;
 
 	int64_t sample_point_64, sum_of_squares_0=0;
 	double rms_0;
@@ -410,7 +410,7 @@ int waveform_2_channel_8_bit_rms(int8_t *samples, int sample_group_size, Signing
 	 * algorithm == RMS
 	 */
 
-	int i, j;
+	int j;
 
 	int64_t sample_point_64, sum_of_squares_0=0, sum_of_squares_1=0;
 	double rms_0, rms_1;
@@ -465,7 +465,7 @@ int waveform_1_channel_16_bit_peak(int16_t *samples, int sample_group_size, int 
 	 * algorithm == PEAK
 	 */
 
-	int i, j;
+	int j;
 
 	int16_t *sample_pointer = samples;
 
@@ -498,7 +498,7 @@ int waveform_2_channel_16_bit_peak(int16_t *samples, int sample_group_size, int 
 	 * algorithm == PEAK
 	 */
 
-	int i, j;
+	int j;
 
 	int16_t *sample_pointer = samples;
 
@@ -542,7 +542,7 @@ int waveform_1_channel_16_bit_mean(int16_t *samples, int sample_group_size, int 
 	 * algorithm == MEAN
 	 */
 
-	int i, j;
+	int j;
 
 	int16_t *sample_pointer = samples;
 
@@ -576,7 +576,7 @@ int waveform_2_channel_16_bit_mean(int16_t *samples, int sample_group_size, int 
 	 * algorithm == MEAN
 	 */
 
-	int i, j;
+	int j;
 
 	int16_t *sample_pointer = samples;
 
@@ -619,7 +619,7 @@ int waveform_1_channel_16_bit_rms(int16_t *samples, int sample_group_size, int s
 	 * algorithm == RMS
 	 */
 
-	int i, j;
+	int j;
 	int16_t *sample_pointer=samples;
 
 	int64_t sample_point, sum_of_squares_0=0;
@@ -657,7 +657,7 @@ int waveform_2_channel_16_bit_rms(int16_t *samples, int sample_group_size, int s
 	 * algorithm == RMS
 	 */
 
-	int i, j;
+	int j;
 
 	int16_t *sample_pointer = samples;
 
@@ -718,7 +718,7 @@ int waveform_1_channel_24_bit_peak(uint8_t *samples, int sample_group_size, int 
 
 	/* Note that 8388608 is 2^23 */
 
-	int i, j;
+	int j;
 
 	uint8_t *sample_pointer = samples;
 
@@ -752,7 +752,7 @@ int waveform_2_channel_24_bit_peak(uint8_t *samples, int sample_group_size, int 
 
 	/* Note that 8388608 is 2^23 */
 
-	int i, j;
+	int j;
 
 	uint8_t *sample_pointer = samples;
 
@@ -802,7 +802,7 @@ int waveform_1_channel_24_bit_mean(uint8_t *samples, int sample_group_size, int 
 
 	/* Note that 8388608 is 2^23 */
 
-	int i, j;
+	int j;
 
 	uint8_t *sample_pointer = samples;
 
@@ -838,7 +838,7 @@ int waveform_2_channel_24_bit_mean(uint8_t *samples, int sample_group_size, int 
 
 	/* Note that 8388608 is 2^23 */
 
-	int i, j;
+	int j;
 
 	uint8_t *sample_pointer = samples;
 
@@ -884,7 +884,7 @@ int waveform_1_channel_24_bit_rms(uint8_t *samples, int sample_group_size, int s
 
 	/* Note that 8388608 is 2^23 */
 
-	int i, j;
+	int j;
 
 	uint8_t *sample_pointer = samples;
 
@@ -927,7 +927,7 @@ int waveform_2_channel_24_bit_rms(uint8_t *samples, int sample_group_size, int s
 
 	/* Note that 8388608 is 2^23 */
 
-	int i, j;
+	int j;
 
 	uint8_t *sample_pointer = samples;
 
