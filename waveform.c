@@ -201,9 +201,9 @@ int* get_sample_group_sizes(int sample_count, int points) {
 
 /*
 	This group of functions handles 8-bit samples.  They can be:
-	1. 1 or 2 channel
-	2. rms, peak, or mean
-	2. signed or unsigned (WAV uses unsigned ints offset by 128)
+	1. peak, mean, or rms
+	2. 1 or 2 channel
+	3. signed or unsigned (WAV uses unsigned ints offset by 128)
 	There are 6 functions in all, as signed/unsigned functions have been
 	rolled in together.
 */
@@ -451,13 +451,10 @@ int waveform_2_channel_8_bit_rms(int8_t *samples, int sample_group_size, Signing
 
 /*
 	This group of functions handles 16-bit samples.  They can be:
-	1. 1 or 2 channel
-	2. same or different endianness
-	3. rms, peak, or mean calculation
-	So, for 16-bit samples there are 12 functions.
-	And, yes, I could roll them into a function but it would include
-	branching or further function calls within the main loop, slowing
-	things down.
+	1. peak, mean, or rms
+	2. 1 or 2 channel
+	So, for 16-bit samples there are 6 functions, with different branches
+	to handle endianness issues.
 */
 
 int waveform_1_channel_16_bit_peak(int16_t *samples, int sample_group_size, int same_endianness) {
@@ -704,7 +701,11 @@ int waveform_2_channel_16_bit_rms(int16_t *samples, int sample_group_size, int s
 }
 
 /*
-	These are the functions for 24-bit samples
+	These are the functions for 24-bit samples.
+	1. peak, mean, or rms
+	2. 1 or 2 channel
+	So, for 24-bit samples there are 6 functions, with different branches
+	to handle endianness issues.
 */
 
 int waveform_1_channel_24_bit_peak(uint8_t *samples, int sample_group_size, int same_endianness) {
