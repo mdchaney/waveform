@@ -1471,14 +1471,15 @@ int main(int argc, char **argv) {
 		 * all in to memory so that we'll know how big it is, then we'll
 		 * run the proper algorithm.  We'll read it in 1MB chunks.  */
 
-		int we_are_done = 0, total_chunks = 0, item_size = 4, items_in_chunk = 250000, sample_count;
+		int total_chunks = 0, item_size = 4, items_in_chunk = 250000, sample_count;
 
 		/* Hard coding a maximum size here of 200 chunks.  That would be
 		 * almost 20 minutes of audio, something of that size should be
 		 * rare. */
-		int16_t *chunks[200];
+		int chunk_limit=200;
+		int16_t *chunks[chunk_limit];
 
-		while (1) {
+		while (total_chunks<chunk_limit) {
 			chunks[total_chunks] = malloc(item_size * items_in_chunk);
 
 			items_read = fread(chunks[total_chunks], item_size, items_in_chunk, stdin);
@@ -1494,6 +1495,11 @@ int main(int argc, char **argv) {
 			      exit(1);
 			   }
 			}
+		}
+
+		if (total_chunks >= chunk_limit) {
+			fprintf(stderr, "Too much data\n");
+			exit(1);
 		}
 
 		/* We now have a bunch of samples, time to do whatever with them. */
