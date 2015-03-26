@@ -202,9 +202,10 @@ int* get_sample_group_sizes(int sample_count, int points) {
 /*
 	This group of functions handles 8-bit samples.  They can be:
 	1. 1 or 2 channel
+	2. rms, peak, or mean
 	2. signed or unsigned (WAV uses unsigned ints offset by 128)
-	3. rms, peak, or mean
-	There are 12 functions in all.
+	There are 6 functions in all, as signed/unsigned functions have been
+	rolled in together.
 */
 
 int waveform_2_channel_8_bit_peak(int8_t *samples, int sample_group_size, Signing_t file_signing) {
