@@ -67,7 +67,7 @@ SUPPORTED FILE FORMATS:
 AIFF and WAV
 Apple AIFC with "sowt" compression (regular PCM in little-endian format)
 
-8, 16 or 24 bit samples (Adding 32-bit samples is easy)
+8, 16 or 24 bit samples (Adding support for 32-bit samples is easy)
 
 1 or 2 channel
 
