@@ -208,6 +208,40 @@ int* get_sample_group_sizes(int sample_count, int points) {
 	rolled in together.
 */
 
+int waveform_1_channel_8_bit_peak(int8_t *samples, int sample_group_size, Signing_t file_signing) {
+
+	/* this code is where:
+	 * data format == signed/unsigned (see file_signing)
+	 * channel_count == 1
+	 * bits_per_sample == 8
+	 * algorithm == PEAK
+	 */
+
+	int i, j, items_read;
+
+	int16_t sample_point, peak_0=0;
+
+	if (file_signing == SIGNED) {
+		int8_t *sample_pointer = samples;
+		for (j=0 ; j<sample_group_size ; j++) {
+			sample_point = abs(*sample_pointer);
+			if (sample_point > peak_0) peak_0 = sample_point;
+			sample_pointer++;
+		}
+	} else {
+		uint8_t *u_sample_pointer = (uint8_t*)samples;
+		for (j=0 ; j<sample_group_size ; j++) {
+			sample_point = abs((int16_t)*u_sample_pointer - 128);
+			if (sample_point > peak_0) peak_0 = sample_point;
+			u_sample_pointer++;
+		}
+	}
+
+	printf("%u\n", (int)floor((double)peak_0 * scale / 128.0));
+
+	return(1);
+}
+
 int waveform_2_channel_8_bit_peak(int8_t *samples, int sample_group_size, Signing_t file_signing) {
 
 	/* this code is where:
@@ -253,36 +287,36 @@ int waveform_2_channel_8_bit_peak(int8_t *samples, int sample_group_size, Signin
 	return(1);
 }
 
-int waveform_1_channel_8_bit_peak(int8_t *samples, int sample_group_size, Signing_t file_signing) {
+int waveform_1_channel_8_bit_mean(int8_t *samples, int sample_group_size, Signing_t file_signing) {
 
 	/* this code is where:
 	 * data format == signed/unsigned (see file_signing)
 	 * channel_count == 1
 	 * bits_per_sample == 8
-	 * algorithm == PEAK
+	 * algorithm == MEAN
 	 */
 
 	int i, j, items_read;
 
-	int16_t sample_point, peak_0=0;
+	int64_t sum_of_samples_0=0;
+	double mean_0;
 
 	if (file_signing == SIGNED) {
 		int8_t *sample_pointer = samples;
 		for (j=0 ; j<sample_group_size ; j++) {
-			sample_point = abs(*sample_pointer);
-			if (sample_point > peak_0) peak_0 = sample_point;
+			sum_of_samples_0 += abs((int64_t)*sample_pointer);
 			sample_pointer++;
 		}
 	} else {
 		uint8_t *u_sample_pointer = (uint8_t*)samples;
 		for (j=0 ; j<sample_group_size ; j++) {
-			sample_point = abs((int16_t)*u_sample_pointer - 128);
-			if (sample_point > peak_0) peak_0 = sample_point;
+			sum_of_samples_0 += abs((int64_t)*u_sample_pointer - 128);
 			u_sample_pointer++;
 		}
 	}
 
-	printf("%u\n", (int)floor((double)peak_0 * scale / 128.0));
+	mean_0 = (double)sum_of_samples_0 / (double)sample_group_size;
+	printf("%u\n", (int)floor((double)mean_0 * scale / 128.0));
 
 	return(1);
 }
@@ -331,36 +365,38 @@ int waveform_2_channel_8_bit_mean(int8_t *samples, int sample_group_size, Signin
 	return(1);
 }
 
-int waveform_1_channel_8_bit_mean(int8_t *samples, int sample_group_size, Signing_t file_signing) {
+int waveform_1_channel_8_bit_rms(int8_t *samples, int sample_group_size, Signing_t file_signing) {
 
 	/* this code is where:
 	 * data format == signed/unsigned (see file_signing)
 	 * channel_count == 1
 	 * bits_per_sample == 8
-	 * algorithm == MEAN
+	 * algorithm == RMS
 	 */
 
 	int i, j, items_read;
 
-	int64_t sum_of_samples_0=0;
-	double mean_0;
+	int64_t sample_point_64, sum_of_squares_0=0;
+	double rms_0;
 
 	if (file_signing == SIGNED) {
 		int8_t *sample_pointer = samples;
 		for (j=0 ; j<sample_group_size ; j++) {
-			sum_of_samples_0 += abs((int64_t)*sample_pointer);
+			sample_point_64 = (int64_t)*sample_pointer;
+			sum_of_squares_0 += (sample_point_64 * sample_point_64);
 			sample_pointer++;
 		}
 	} else {
 		uint8_t *u_sample_pointer = (uint8_t*)samples;
 		for (j=0 ; j<sample_group_size ; j++) {
-			sum_of_samples_0 += abs((int64_t)*u_sample_pointer - 128);
+			sample_point_64 = (int64_t)*u_sample_pointer - 128;
+			sum_of_squares_0 += (sample_point_64 * sample_point_64);
 			u_sample_pointer++;
 		}
 	}
 
-	mean_0 = (double)sum_of_samples_0 / (double)sample_group_size;
-	printf("%u\n", (int)floor((double)mean_0 * scale / 128.0));
+	rms_0 = sqrt((double)sum_of_squares_0 / (double)sample_group_size);
+	printf("%u\n", (int)floor((double)rms_0 * scale / 128.0));
 
 	return(1);
 }
@@ -413,42 +449,6 @@ int waveform_2_channel_8_bit_rms(int8_t *samples, int sample_group_size, Signing
 	return(1);
 }
 
-int waveform_1_channel_8_bit_rms(int8_t *samples, int sample_group_size, Signing_t file_signing) {
-
-	/* this code is where:
-	 * data format == signed/unsigned (see file_signing)
-	 * channel_count == 1
-	 * bits_per_sample == 8
-	 * algorithm == RMS
-	 */
-
-	int i, j, items_read;
-
-	int64_t sample_point_64, sum_of_squares_0=0;
-	double rms_0;
-
-	if (file_signing == SIGNED) {
-		int8_t *sample_pointer = samples;
-		for (j=0 ; j<sample_group_size ; j++) {
-			sample_point_64 = (int64_t)*sample_pointer;
-			sum_of_squares_0 += (sample_point_64 * sample_point_64);
-			sample_pointer++;
-		}
-	} else {
-		uint8_t *u_sample_pointer = (uint8_t*)samples;
-		for (j=0 ; j<sample_group_size ; j++) {
-			sample_point_64 = (int64_t)*u_sample_pointer - 128;
-			sum_of_squares_0 += (sample_point_64 * sample_point_64);
-			u_sample_pointer++;
-		}
-	}
-
-	rms_0 = sqrt((double)sum_of_squares_0 / (double)sample_group_size);
-	printf("%u\n", (int)floor((double)rms_0 * scale / 128.0));
-
-	return(1);
-}
-
 /*
 	This group of functions handles 16-bit samples.  They can be:
 	1. 1 or 2 channel
@@ -459,6 +459,160 @@ int waveform_1_channel_8_bit_rms(int8_t *samples, int sample_group_size, Signing
 	branching or further function calls within the main loop, slowing
 	things down.
 */
+
+int waveform_1_channel_16_bit_peak(int16_t *samples, int sample_group_size, int same_endianness) {
+
+	/* this code is where:
+	 * channel_count == 1
+	 * bits_per_sample == 16
+	 * algorithm == PEAK
+	 */
+
+	int i, j, items_read;
+
+	int16_t *sample_pointer = samples;
+
+	int16_t sample_point, peak_0=0;
+
+	if (same_endianness) {
+		for (j=0 ; j<sample_group_size ; j++) {
+			sample_point = abs(*sample_pointer);
+			if (sample_point > peak_0) peak_0 = sample_point;
+			sample_pointer++;
+		}
+	} else {
+		for (j=0 ; j<sample_group_size ; j++) {
+			sample_point = abs(swap_int16(*sample_pointer));
+			if (sample_point > peak_0) peak_0 = sample_point;
+			sample_pointer++;
+		}
+	}
+
+	printf("%u\n", (int)floor((double)peak_0 * scale / 32768.0));
+
+	return(1);
+}
+
+int waveform_2_channel_16_bit_peak(int16_t *samples, int sample_group_size, int same_endianness) {
+
+	/* this code is where:
+	 * channel_count == 2
+	 * bits_per_sample == 16
+	 * algorithm == PEAK
+	 */
+
+	int i, j, items_read;
+
+	int16_t *sample_pointer = samples;
+
+	int16_t sample_point, peak_0=0, peak_1=0;
+
+	if (same_endianness) {
+		for (j=0 ; j<sample_group_size ; j++) {
+			sample_point = abs(*sample_pointer);
+			if (sample_point > peak_0) peak_0 = sample_point;
+			sample_pointer++;
+			sample_point = abs(*sample_pointer);
+			if (sample_point > peak_1) peak_1 = sample_point;
+			sample_pointer++;
+		}
+	} else {
+		for (j=0 ; j<sample_group_size ; j++) {
+			sample_point = abs(swap_int16(*sample_pointer));
+			if (sample_point > peak_0) peak_0 = sample_point;
+			sample_pointer++;
+			sample_point = abs(swap_int16(*sample_pointer));
+			if (sample_point > peak_1) peak_1 = sample_point;
+			sample_pointer++;
+		}
+	}
+
+	if (mono_flag) {
+		if (peak_1 > peak_0) { peak_0 = peak_1; }
+		printf("%u\n", (int)floor((double)peak_0 * scale / 32768.0));
+	} else {
+		printf("%u,%u\n", (int)floor((double)peak_0 * scale / 32768.0), (int)floor((double)peak_1 * scale / 32768.0));
+	}
+
+	return(1);
+}
+
+int waveform_1_channel_16_bit_mean(int16_t *samples, int sample_group_size, int same_endianness) {
+
+	/* this code is where:
+	 * channel_count == 1
+	 * bits_per_sample == 16
+	 * algorithm == MEAN
+	 */
+
+	int i, j, items_read;
+
+	int16_t *sample_pointer = samples;
+
+	int64_t sample_point, sum_of_samples_0=0;
+	double mean_0;
+
+	if (same_endianness) {
+		for (j=0 ; j<sample_group_size ; j++) {
+			sum_of_samples_0 += abs(*sample_pointer);
+			sample_pointer++;
+		}
+	} else {
+		for (j=0 ; j<sample_group_size ; j++) {
+			sum_of_samples_0 += abs(swap_int16(*sample_pointer));
+			sample_pointer++;
+		}
+	}
+
+	mean_0 = (double)sum_of_samples_0 / ((double)sample_group_size * 2.0);
+
+	printf("%u\n", (int)floor(mean_0 * scale / 32768.0));
+
+	return(1);
+}
+
+int waveform_2_channel_16_bit_mean(int16_t *samples, int sample_group_size, int same_endianness) {
+
+	/* this code is where:
+	 * channel_count == 2
+	 * bits_per_sample == 16
+	 * algorithm == MEAN
+	 */
+
+	int i, j, items_read;
+
+	int16_t *sample_pointer = samples;
+
+	int64_t sample_point, sum_of_samples_0=0, sum_of_samples_1=0;
+	double mean_0, mean_1;
+
+	if (same_endianness) {
+		for (j=0 ; j<sample_group_size ; j++) {
+			sum_of_samples_0 += abs(*sample_pointer);
+			sample_pointer++;
+			sum_of_samples_1 += abs(*sample_pointer);
+			sample_pointer++;
+		}
+	} else {
+		for (j=0 ; j<sample_group_size ; j++) {
+			sum_of_samples_0 += abs(swap_int16(*sample_pointer));
+			sample_pointer++;
+			sum_of_samples_1 += abs(swap_int16(*sample_pointer));
+			sample_pointer++;
+		}
+	}
+
+	if (mono_flag) {
+		mean_0 = (double)(sum_of_samples_0 + sum_of_samples_1) / ((double)sample_group_size * 2.0);
+		printf("%u\n", (int)floor(mean_0 * scale / 32768.0));
+	} else {
+		mean_0 = (double)sum_of_samples_0 / (double)sample_group_size;
+		mean_1 = (double)sum_of_samples_1 / (double)sample_group_size;
+		printf("%u,%u\n", (int)floor(mean_0 * scale / 32768.0), (int)floor(mean_1 * scale / 32768.0));
+	}
+
+	return(1);
+}
 
 int waveform_1_channel_16_bit_rms(int16_t *samples, int sample_group_size, int same_endianness) {
 
@@ -494,73 +648,6 @@ int waveform_1_channel_16_bit_rms(int16_t *samples, int sample_group_size, int s
 	rms_0 = sqrt((double)sum_of_squares_0 / (double)sample_group_size);
 
 	printf("%u\n", (int)floor(rms_0 * scale / 32768.0));
-
-	return(1);
-}
-
-int waveform_1_channel_16_bit_peak(int16_t *samples, int sample_group_size, int same_endianness) {
-
-	/* this code is where:
-	 * channel_count == 1
-	 * bits_per_sample == 16
-	 * algorithm == PEAK
-	 */
-
-	int i, j, items_read;
-
-	int16_t *sample_pointer = samples;
-
-	int16_t sample_point, peak_0=0;
-
-	if (same_endianness) {
-		for (j=0 ; j<sample_group_size ; j++) {
-			sample_point = abs(*sample_pointer);
-			if (sample_point > peak_0) peak_0 = sample_point;
-			sample_pointer++;
-		}
-	} else {
-		for (j=0 ; j<sample_group_size ; j++) {
-			sample_point = abs(swap_int16(*sample_pointer));
-			if (sample_point > peak_0) peak_0 = sample_point;
-			sample_pointer++;
-		}
-	}
-
-	printf("%u\n", (int)floor((double)peak_0 * scale / 32768.0));
-
-	return(1);
-}
-
-int waveform_1_channel_16_bit_mean(int16_t *samples, int sample_group_size, int same_endianness) {
-
-	/* this code is where:
-	 * channel_count == 1
-	 * bits_per_sample == 16
-	 * algorithm == MEAN
-	 */
-
-	int i, j, items_read;
-
-	int16_t *sample_pointer = samples;
-
-	int64_t sample_point, sum_of_samples_0=0;
-	double mean_0;
-
-	if (same_endianness) {
-		for (j=0 ; j<sample_group_size ; j++) {
-			sum_of_samples_0 += abs(*sample_pointer);
-			sample_pointer++;
-		}
-	} else {
-		for (j=0 ; j<sample_group_size ; j++) {
-			sum_of_samples_0 += abs(swap_int16(*sample_pointer));
-			sample_pointer++;
-		}
-	}
-
-	mean_0 = (double)sum_of_samples_0 / ((double)sample_group_size * 2.0);
-
-	printf("%u\n", (int)floor(mean_0 * scale / 32768.0));
 
 	return(1);
 }
@@ -616,94 +703,6 @@ int waveform_2_channel_16_bit_rms(int16_t *samples, int sample_group_size, int s
 	return(1);
 }
 
-int waveform_2_channel_16_bit_peak(int16_t *samples, int sample_group_size, int same_endianness) {
-
-	/* this code is where:
-	 * channel_count == 2
-	 * bits_per_sample == 16
-	 * algorithm == PEAK
-	 */
-
-	int i, j, items_read;
-
-	int16_t *sample_pointer = samples;
-
-	int16_t sample_point, peak_0=0, peak_1=0;
-
-	if (same_endianness) {
-		for (j=0 ; j<sample_group_size ; j++) {
-			sample_point = abs(*sample_pointer);
-			if (sample_point > peak_0) peak_0 = sample_point;
-			sample_pointer++;
-			sample_point = abs(*sample_pointer);
-			if (sample_point > peak_1) peak_1 = sample_point;
-			sample_pointer++;
-		}
-	} else {
-		for (j=0 ; j<sample_group_size ; j++) {
-			sample_point = abs(swap_int16(*sample_pointer));
-			if (sample_point > peak_0) peak_0 = sample_point;
-			sample_pointer++;
-			sample_point = abs(swap_int16(*sample_pointer));
-			if (sample_point > peak_1) peak_1 = sample_point;
-			sample_pointer++;
-		}
-	}
-
-	if (mono_flag) {
-		if (peak_1 > peak_0) { peak_0 = peak_1; }
-		printf("%u\n", (int)floor((double)peak_0 * scale / 32768.0));
-	} else {
-		printf("%u,%u\n", (int)floor((double)peak_0 * scale / 32768.0), (int)floor((double)peak_1 * scale / 32768.0));
-	}
-
-	return(1);
-}
-
-
-int waveform_2_channel_16_bit_mean(int16_t *samples, int sample_group_size, int same_endianness) {
-
-	/* this code is where:
-	 * channel_count == 2
-	 * bits_per_sample == 16
-	 * algorithm == MEAN
-	 */
-
-	int i, j, items_read;
-
-	int16_t *sample_pointer = samples;
-
-	int64_t sample_point, sum_of_samples_0=0, sum_of_samples_1=0;
-	double mean_0, mean_1;
-
-	if (same_endianness) {
-		for (j=0 ; j<sample_group_size ; j++) {
-			sum_of_samples_0 += abs(*sample_pointer);
-			sample_pointer++;
-			sum_of_samples_1 += abs(*sample_pointer);
-			sample_pointer++;
-		}
-	} else {
-		for (j=0 ; j<sample_group_size ; j++) {
-			sum_of_samples_0 += abs(swap_int16(*sample_pointer));
-			sample_pointer++;
-			sum_of_samples_1 += abs(swap_int16(*sample_pointer));
-			sample_pointer++;
-		}
-	}
-
-	if (mono_flag) {
-		mean_0 = (double)(sum_of_samples_0 + sum_of_samples_1) / ((double)sample_group_size * 2.0);
-		printf("%u\n", (int)floor(mean_0 * scale / 32768.0));
-	} else {
-		mean_0 = (double)sum_of_samples_0 / (double)sample_group_size;
-		mean_1 = (double)sum_of_samples_1 / (double)sample_group_size;
-		printf("%u,%u\n", (int)floor(mean_0 * scale / 32768.0), (int)floor(mean_1 * scale / 32768.0));
-	}
-
-	return(1);
-}
-
 /*
 	These are the functions for 24-bit samples
 */
@@ -738,85 +737,6 @@ int waveform_1_channel_24_bit_peak(uint8_t *samples, int sample_group_size, int 
 		}
 	}
 	printf("%u\n", (int)floor((double)peak_0 * scale / 8388608.0));
-
-	return(1);
-}
-
-int waveform_1_channel_24_bit_mean(uint8_t *samples, int sample_group_size, int same_endianness) {
-
-	/* this code is where:
-	 * channel_count == 1
-	 * bits_per_sample ==24 
-	 * algorithm == MEAN
-	 */
-
-	/* Note that 8388608 is 2^23 */
-
-	int i, j, items_read;
-
-	uint8_t *sample_pointer = samples;
-
-	int32_t sample_point_0;
-	int64_t sum_of_samples_0=0;
-	double mean_0;
-
-	if (same_endianness) {
-		for (j=0 ; j<sample_group_size ; j++) {
-			get_unswapped_24_bit_int(sample_pointer, sample_point_0);
-			sum_of_samples_0 += abs(sample_point_0);
-		}
-	} else {
-		for (j=0 ; j<sample_group_size ; j++) {
-			get_swapped_24_bit_int(sample_pointer, sample_point_0);
-			sum_of_samples_0 += abs(sample_point_0);
-		}
-	}
-
-	mean_0 = (double)sum_of_samples_0 / (double)sample_group_size;
-	printf("%u\n", (int)floor(mean_0 * scale / 8388608.0));
-
-	return(1);
-}
-
-int waveform_1_channel_24_bit_rms(uint8_t *samples, int sample_group_size, int same_endianness) {
-
-	/* this code is where:
-	 * channel_count == 1
-	 * bits_per_sample ==24 
-	 * algorithm == RMS
-	 */
-
-	/* Note that 8388608 is 2^23 */
-
-	int i, j, items_read;
-
-	uint8_t *sample_pointer = samples;
-
-	int32_t sample_point;
-	int64_t sample_point_64;
-	int64_t sum_of_squares_0=0;
-	double rms_0;
-
-	if (same_endianness) {
-		for (j=0 ; j<sample_group_size ; j++) {
-			get_unswapped_24_bit_int(sample_pointer, sample_point);
-			sample_point_64 = sample_point;
-			sum_of_squares_0 += (sample_point_64 * sample_point_64);
-		}
-	} else {
-		for (j=0 ; j<sample_group_size ; j++) {
-			get_swapped_24_bit_int(sample_pointer, sample_point);
-			sample_point_64 = sample_point;
-			sum_of_squares_0 += (sample_point_64 * sample_point_64);
-		}
-	}
-
-	/* At this point we have the sums of the squares of
-	 * the sample group.  We'll do our floating point math
-	 * here to get the square root. */
-
-	rms_0 = sqrt((double)sum_of_squares_0 / (double)sample_group_size);
-	printf("%u\n", (int)floor(rms_0 * scale / 8388608.0));
 
 	return(1);
 }
@@ -871,6 +791,42 @@ int waveform_2_channel_24_bit_peak(uint8_t *samples, int sample_group_size, int 
 	return(1);
 }
 
+int waveform_1_channel_24_bit_mean(uint8_t *samples, int sample_group_size, int same_endianness) {
+
+	/* this code is where:
+	 * channel_count == 1
+	 * bits_per_sample ==24 
+	 * algorithm == MEAN
+	 */
+
+	/* Note that 8388608 is 2^23 */
+
+	int i, j, items_read;
+
+	uint8_t *sample_pointer = samples;
+
+	int32_t sample_point_0;
+	int64_t sum_of_samples_0=0;
+	double mean_0;
+
+	if (same_endianness) {
+		for (j=0 ; j<sample_group_size ; j++) {
+			get_unswapped_24_bit_int(sample_pointer, sample_point_0);
+			sum_of_samples_0 += abs(sample_point_0);
+		}
+	} else {
+		for (j=0 ; j<sample_group_size ; j++) {
+			get_swapped_24_bit_int(sample_pointer, sample_point_0);
+			sum_of_samples_0 += abs(sample_point_0);
+		}
+	}
+
+	mean_0 = (double)sum_of_samples_0 / (double)sample_group_size;
+	printf("%u\n", (int)floor(mean_0 * scale / 8388608.0));
+
+	return(1);
+}
+
 int waveform_2_channel_24_bit_mean(uint8_t *samples, int sample_group_size, int same_endianness) {
 
 	/* this code is where:
@@ -913,6 +869,49 @@ int waveform_2_channel_24_bit_mean(uint8_t *samples, int sample_group_size, int 
 		mean_1 = (double)sum_of_samples_1 / (double)sample_group_size;
 		printf("%u,%u\n", (int)floor(mean_0 * scale / 8388608.0), (int)floor(mean_1 * scale / 8388608.0));
 	}
+
+	return(1);
+}
+
+int waveform_1_channel_24_bit_rms(uint8_t *samples, int sample_group_size, int same_endianness) {
+
+	/* this code is where:
+	 * channel_count == 1
+	 * bits_per_sample ==24 
+	 * algorithm == RMS
+	 */
+
+	/* Note that 8388608 is 2^23 */
+
+	int i, j, items_read;
+
+	uint8_t *sample_pointer = samples;
+
+	int32_t sample_point;
+	int64_t sample_point_64;
+	int64_t sum_of_squares_0=0;
+	double rms_0;
+
+	if (same_endianness) {
+		for (j=0 ; j<sample_group_size ; j++) {
+			get_unswapped_24_bit_int(sample_pointer, sample_point);
+			sample_point_64 = sample_point;
+			sum_of_squares_0 += (sample_point_64 * sample_point_64);
+		}
+	} else {
+		for (j=0 ; j<sample_group_size ; j++) {
+			get_swapped_24_bit_int(sample_pointer, sample_point);
+			sample_point_64 = sample_point;
+			sum_of_squares_0 += (sample_point_64 * sample_point_64);
+		}
+	}
+
+	/* At this point we have the sums of the squares of
+	 * the sample group.  We'll do our floating point math
+	 * here to get the square root. */
+
+	rms_0 = sqrt((double)sum_of_squares_0 / (double)sample_group_size);
+	printf("%u\n", (int)floor(rms_0 * scale / 8388608.0));
 
 	return(1);
 }
