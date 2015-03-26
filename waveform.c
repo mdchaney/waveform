@@ -646,33 +646,25 @@ int waveform_2_channel_16_bit_same_endianness_rms(int16_t *samples, int sample_g
 	int64_t sum_of_squares_0=0, sum_of_squares_1=0;
 	double rms_0, rms_1;
 
-	if (mono_flag) {
-		for (j=0 ; j<sample_group_size*2 ; j++) {
-			int64_t sample_point = *sample_pointer;
-			sum_of_squares_0 += (sample_point * sample_point);
-			sample_pointer++;
-		}
-		/* At this point we have the sums of the squares of
-		 * the sample group.  We'll do our floating point math
-		 * here to get the square root. */
-		rms_0 = sqrt((double)sum_of_squares_0 / ((double)sample_group_size * 2.0));
+	for (j=0 ; j<sample_group_size ; j++) {
+		int64_t sample_point = *sample_pointer;
+		sum_of_squares_0 += (sample_point * sample_point);
+		sample_pointer++;
+		sample_point = *sample_pointer;
+		sum_of_squares_1 += (sample_point * sample_point);
+		sample_pointer++;
+	}
 
+	/* At this point we have the sums of the squares of
+	 * the sample group.  We'll do our floating point math
+	 * here to get the square root. */
+
+	if (mono_flag) {
+		rms_0 = sqrt((double)(sum_of_squares_0 + sum_of_squares_1) / ((double)sample_group_size * 2.0));
 		printf("%u\n", (int)floor(rms_0 * scale / 32768.0));
 	} else {
-		for (j=0 ; j<sample_group_size ; j++) {
-			int64_t sample_point = *sample_pointer;
-			sum_of_squares_0 += (sample_point * sample_point);
-			sample_pointer++;
-			sample_point = *sample_pointer;
-			sum_of_squares_1 += (sample_point * sample_point);
-			sample_pointer++;
-		}
-		/* At this point we have the sums of the squares of
-		 * the sample group.  We'll do our floating point math
-		 * here to get the square root. */
 		rms_0 = sqrt((double)sum_of_squares_0 / (double)sample_group_size);
 		rms_1 = sqrt((double)sum_of_squares_1 / (double)sample_group_size);
-
 		printf("%u,%u\n", (int)floor(rms_0 * scale / 32768.0), (int)floor(rms_1 * scale / 32768.0));
 	}
 
@@ -695,30 +687,23 @@ int waveform_2_channel_16_bit_diff_endianness_rms(int16_t *samples, int sample_g
 	int64_t sum_of_squares_0=0, sum_of_squares_1=0;
 	double rms_0, rms_1;
 
-	if (mono_flag) {
-		for (j=0 ; j<sample_group_size*2 ; j++) {
-			int64_t sample_point = swap_int16(*sample_pointer);
-			sum_of_squares_0 += (sample_point * sample_point);
-			sample_pointer++;
-		}
-		/* At this point we have the sums of the squares of
-		 * the sample group.  We'll do our floating point math
-		 * here to get the square root. */
-		rms_0 = sqrt((double)sum_of_squares_0 / ((double)sample_group_size * 2.0));
+	for (j=0 ; j<sample_group_size ; j++) {
+		int64_t sample_point = swap_int16(*sample_pointer);
+		sum_of_squares_0 += (sample_point * sample_point);
+		sample_pointer++;
+		sample_point = swap_int16(*sample_pointer);
+		sum_of_squares_1 += (sample_point * sample_point);
+		sample_pointer++;
+	}
 
+	/* At this point we have the sums of the squares of
+	 * the sample group.  We'll do our floating point math
+	 * here to get the square root. */
+
+	if (mono_flag) {
+		rms_0 = sqrt((double)(sum_of_squares_0 + sum_of_squares_1) / ((double)sample_group_size * 2.0));
 		printf("%u\n", (int)floor(rms_0 * scale / 32768.0));
 	} else {
-		for (j=0 ; j<sample_group_size ; j++) {
-			int64_t sample_point = swap_int16(*sample_pointer);
-			sum_of_squares_0 += (sample_point * sample_point);
-			sample_pointer++;
-			sample_point = swap_int16(*sample_pointer);
-			sum_of_squares_1 += (sample_point * sample_point);
-			sample_pointer++;
-		}
-		/* At this point we have the sums of the squares of
-		 * the sample group.  We'll do our floating point math
-		 * here to get the square root. */
 		rms_0 = sqrt((double)sum_of_squares_0 / (double)sample_group_size);
 		rms_1 = sqrt((double)sum_of_squares_1 / (double)sample_group_size);
 
@@ -743,23 +728,19 @@ int waveform_2_channel_16_bit_same_endianness_peak(int16_t *samples, int sample_
 
 	int16_t sample_point, peak_0=0, peak_1=0;
 
+	for (j=0 ; j<sample_group_size ; j++) {
+		sample_point = abs(*sample_pointer);
+		if (sample_point > peak_0) peak_0 = sample_point;
+		sample_pointer++;
+		sample_point = abs(*sample_pointer);
+		if (sample_point > peak_1) peak_1 = sample_point;
+		sample_pointer++;
+	}
+
 	if (mono_flag) {
-		for (j=0 ; j<sample_group_size*2 ; j++) {
-			sample_point = *sample_pointer;
-			sample_point = abs(sample_point);
-			if (sample_point > peak_0) peak_0 = sample_point;
-			sample_pointer++;
-		}
+		if (peak_1 > peak_0) { peak_0 = peak_1; }
 		printf("%u\n", (int)floor((double)peak_0 * scale / 32768.0));
 	} else {
-		for (j=0 ; j<sample_group_size ; j++) {
-			sample_point = abs(*sample_pointer);
-			if (sample_point > peak_0) peak_0 = sample_point;
-			sample_pointer++;
-			sample_point = abs(*sample_pointer);
-			if (sample_point > peak_1) peak_1 = sample_point;
-			sample_pointer++;
-		}
 		printf("%u,%u\n", (int)floor((double)peak_0 * scale / 32768.0), (int)floor((double)peak_1 * scale / 32768.0));
 	}
 
@@ -781,22 +762,19 @@ int waveform_2_channel_16_bit_diff_endianness_peak(int16_t *samples, int sample_
 
 	int sample_point, peak_0=0, peak_1=0;
 
+	for (j=0 ; j<sample_group_size ; j++) {
+		sample_point = abs(swap_int16(*sample_pointer));
+		if (sample_point > peak_0) peak_0 = sample_point;
+		sample_pointer++;
+		sample_point = abs(swap_int16(*sample_pointer));
+		if (sample_point > peak_1) peak_1 = sample_point;
+		sample_pointer++;
+	}
+
 	if (mono_flag) {
-		for (j=0 ; j<sample_group_size*2 ; j++) {
-			sample_point = abs(swap_int16(*sample_pointer));
-			if (sample_point > peak_0) peak_0 = sample_point;
-			sample_pointer++;
-		}
+		if (peak_1 > peak_0) { peak_0 = peak_1; }
 		printf("%u\n", (int)floor((double)peak_0 * scale / 32768.0));
 	} else {
-		for (j=0 ; j<sample_group_size ; j++) {
-			sample_point = abs(swap_int16(*sample_pointer));
-			if (sample_point > peak_0) peak_0 = sample_point;
-			sample_pointer++;
-			sample_point = abs(swap_int16(*sample_pointer));
-			if (sample_point > peak_1) peak_1 = sample_point;
-			sample_pointer++;
-		}
 		printf("%u,%u\n", (int)floor((double)peak_0 * scale / 32768.0), (int)floor((double)peak_1 * scale / 32768.0));
 	}
 
@@ -819,26 +797,19 @@ int waveform_2_channel_16_bit_same_endianness_mean(int16_t *samples, int sample_
 	int64_t sample_point, sum_of_samples_0=0, sum_of_samples_1=0;
 	double mean_0, mean_1;
 
+	for (j=0 ; j<sample_group_size ; j++) {
+		sum_of_samples_0 += abs(*sample_pointer);
+		sample_pointer++;
+		sum_of_samples_1 += abs(*sample_pointer);
+		sample_pointer++;
+	}
+
 	if (mono_flag) {
-		for (j=0 ; j<sample_group_size*2 ; j++) {
-			sum_of_samples_0 += abs(*sample_pointer);
-			sample_pointer++;
-		}
-
-		mean_0 = (double)sum_of_samples_0 / ((double)sample_group_size * 2.0);
-
+		mean_0 = (double)(sum_of_samples_0 + sum_of_samples_1) / ((double)sample_group_size * 2.0);
 		printf("%u\n", (int)floor(mean_0 * scale / 32768.0));
 	} else {
-		for (j=0 ; j<sample_group_size ; j++) {
-			sum_of_samples_0 += abs(*sample_pointer);
-			sample_pointer++;
-			sum_of_samples_1 += abs(*sample_pointer);
-			sample_pointer++;
-		}
-
 		mean_0 = (double)sum_of_samples_0 / (double)sample_group_size;
 		mean_1 = (double)sum_of_samples_1 / (double)sample_group_size;
-
 		printf("%u,%u\n", (int)floor(mean_0 * scale / 32768.0), (int)floor(mean_1 * scale / 32768.0));
 	}
 
@@ -861,30 +832,19 @@ int waveform_2_channel_16_bit_diff_endianness_mean(int16_t *samples, int sample_
 	int64_t sample_point, sum_of_samples_0=0, sum_of_samples_1=0;
 	double mean_0, mean_1;
 
-	if (mono_flag) {
-		for (j=0 ; j<sample_group_size*2 ; j++) {
-			sum_of_samples_0 += abs(swap_int16(*sample_pointer));
-			sample_pointer++;
-		}
-		/* At this point we have the sums of the squares of
-		 * the sample group.  We'll do our floating point math
-		 * here to get the square root. */
-		mean_0 = (double)sum_of_samples_0 / ((double)sample_group_size * 2.0);
+	for (j=0 ; j<sample_group_size ; j++) {
+		sum_of_samples_0 += abs(swap_int16(*sample_pointer));
+		sample_pointer++;
+		sum_of_samples_1 += abs(swap_int16(*sample_pointer));
+		sample_pointer++;
+	}
 
+	if (mono_flag) {
+		mean_0 = (double)(sum_of_samples_0 + sum_of_samples_1) / ((double)sample_group_size * 2.0);
 		printf("%u\n", (int)floor(mean_0 * scale / 32768.0));
 	} else {
-		for (j=0 ; j<sample_group_size ; j++) {
-			sum_of_samples_0 += abs(swap_int16(*sample_pointer));
-			sample_pointer++;
-			sum_of_samples_1 += abs(swap_int16(*sample_pointer));
-			sample_pointer++;
-		}
-		/* At this point we have the sums of the squares of
-		 * the sample group.  We'll do our floating point math
-		 * here to get the square root. */
 		mean_0 = (double)sum_of_samples_0 / (double)sample_group_size;
 		mean_1 = (double)sum_of_samples_1 / (double)sample_group_size;
-
 		printf("%u,%u\n", (int)floor(mean_0 * scale / 32768.0), (int)floor(mean_1 * scale / 32768.0));
 	}
 
