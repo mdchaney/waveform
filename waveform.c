@@ -47,11 +47,10 @@
 #pragma pack(1)
 
 static int verbose_flag = 0, debug_flag = 0, mono_flag = 0, raw_flag = 0;
+static int help_flag = 0;
 static unsigned long points = 1000;
-static double scale = 256;
-static int use_peak;
-static int use_mean;
-static int use_rms;
+static double scale = 256.0;
+static int use_peak = 0, use_mean = 0, use_rms = 0;
 
 typedef enum { SIGNED, UNSIGNED } Signing_t;
 typedef enum { BIG, LITTLE, MIXED } Endianness_t;
@@ -1343,6 +1342,7 @@ int main(int argc, char **argv) {
 			{ "points", required_argument, 0, 'p' },
 			{ "scale", required_argument, 0, 's' },
 			{ "raw", no_argument, &raw_flag, 1 },
+			{ "help", no_argument, &help_flag, 1 },
 			{ 0, 0, 0, 0 }
 		};
 
@@ -1379,6 +1379,24 @@ int main(int argc, char **argv) {
 			default:
 				abort();
 		}
+	}
+
+	if (help_flag) {
+		fprintf(stdout,
+"Usage: %s [--verbose] [--mono] [--peak|--mean|--rms] [--points x] [--scale y] [--raw] [filename]\n\
+\n\
+--verbose          - show more verbose output\n\
+--mono             - output only one channel, even if input is stereo\n\
+--peak             - choose the peak value from each sample group\n\
+--mean             - calculate and output the mean value from each sample group\n\
+--rms              - calculate and output the RMS (root mean squared) value \n\
+                     from each sample group\n\
+--points x         - output x points (defaults to 1000)\n\
+--scale y          - scale the output values from 0 to y, inclusive\n\
+--raw              - read raw PCM data (output of `lame --decode -t ...')\n\
+\n\
+See README for more details.\n", argv[0]);
+		exit(0);
 	}
 
 	if (!use_peak && !use_mean && !use_rms) use_rms = 1;
