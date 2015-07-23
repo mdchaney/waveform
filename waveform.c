@@ -1489,7 +1489,7 @@ See README for more details.\n", argv[0]);
 		 * all in to memory so that we'll know how big it is, then we'll
 		 * run the proper algorithm.  We'll read it in 1MB chunks.  */
 
-		int total_chunks = 0, item_size = 4, items_in_chunk = 250000, sample_count;
+		int64_t total_chunks = 0, item_size = 4, items_in_chunk = 250000, sample_count;
 
 		/* Hard coding a maximum size here of 200 chunks.  That would be
 		 * almost 20 minutes of audio, something of that size should be
