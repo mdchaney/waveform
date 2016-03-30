@@ -1813,6 +1813,12 @@ See README for more details.\n", argv[0]);
 				chunk_leftover = 0;
 			}
 	
+			/* There will be a padding byte to skip if the chunk has an
+			 * odd length */
+			if ((chunk_length & 1) == 1) {
+				chunk_leftover++;
+			}
+
 			if (fseek(stdin, chunk_leftover, SEEK_CUR) != 0) {
 				if (feof(stdin)) {
 					fprintf(stderr, "Unexpected EOF\n");
