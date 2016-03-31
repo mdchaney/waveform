@@ -1693,9 +1693,16 @@ See README for more details.\n", argv[0]);
 					int32_t byte_rate;
 					int16_t block_align;
 					int16_t bits_per_sample;
-					char    padding[30]; /* sometimes the chunk is longer */
+					int16_t extended_size;
+					int16_t valid_bits_per_sample;
+					int32_t channel_mask;
+					int16_t ext_audio_format;
+					char rest_of_subformat[14];
 				} fmt_chunk;
 	
+				/* initialize this to 0, chunk may be shorter */
+				fmt_chunk.extended_size = 0;
+
 				if (chunk_length > sizeof(fmt_chunk)) {
 					fprintf(stderr, "fmt chunk length is too long, got %d but expected %lu\n", chunk_length, sizeof(fmt_chunk));
 					exit(1);
@@ -1709,6 +1716,17 @@ See README for more details.\n", argv[0]);
 				}
 	
 				int16_t audio_format = (machine_endianness != file_endianness ?  swap_int16(fmt_chunk.audio_format) : fmt_chunk.audio_format);
+				int16_t extended_size = (machine_endianness != file_endianness ?  swap_int16(fmt_chunk.extended_size) : fmt_chunk.extended_size);
+
+				if (audio_format == -2) {
+
+					if (extended_size == 0) {
+						fprintf(stderr, "Expecting extended fmt chunk, but it's missing\n");
+						exit(1);
+					}
+
+					audio_format = (machine_endianness != file_endianness ?  swap_int16(fmt_chunk.ext_audio_format) : fmt_chunk.ext_audio_format);
+				}
 	
 				if (audio_format != 1) {
 					fprintf(stderr, "Unusable wave format tag: %d\n", audio_format);
@@ -1725,8 +1743,8 @@ See README for more details.\n", argv[0]);
 				file_signing = (bits_per_sample == 8 ? UNSIGNED : SIGNED);
 	
 				if (debug_flag) {
-					fprintf(stderr, "Audio Format: %d, Channel Count: %d, Block Align: %d, Bits Per Sample: %d, Sample Rate: %d, Data Format: ",
-						audio_format, channel_count, block_align, bits_per_sample, sample_rate);
+					fprintf(stderr, "Audio Format: %d, Channel Count: %d, Block Align: %d, Bits Per Sample: %d, Sample Rate: %d, Extended fmt Size: %d, Data Format: ",
+						audio_format, channel_count, block_align, bits_per_sample, sample_rate, extended_size);
 					fprintf(stderr, "%s\n", (file_signing == SIGNED ? "Signed" : "Unsigned"));
 				}
 
