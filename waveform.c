@@ -4,7 +4,8 @@
 	By Michael Chaney
 	Copyright 2014 Michael Chaney Consulting Corporation - All rights reserved
 
-	Released under terms of the MIT license
+	Released under terms of the MIT license or GNU General Public
+	License v2.  See MIT-LICENSE or GPLv2-LICENSE files for details.
 
 	The "points" option tells how many data points will be computed in
 	total.  Bresenham's algorithm will be used to determine the number
