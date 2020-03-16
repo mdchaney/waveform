@@ -1324,6 +1324,8 @@ int calculate_waveform_from_raw(int16_t **chunks, int items_in_chunk, int sample
 
 	free(samples);
 
+	free(sample_group_sizes);
+
 	return(1);
 }
 
