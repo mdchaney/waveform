@@ -473,7 +473,8 @@ int waveform_1_channel_16_bit_peak(int16_t *samples, int sample_group_size, int 
 
 	int16_t *sample_pointer = samples;
 
-	int16_t sample_point, peak_0=0;
+	/* int, not int16_t: abs(-32768) is 32768, which doesn't fit in int16_t. */
+	int sample_point, peak_0=0;
 
 	if (same_endianness) {
 		for (j=0 ; j<sample_group_size ; j++) {
@@ -506,7 +507,8 @@ int waveform_2_channel_16_bit_peak(int16_t *samples, int sample_group_size, int 
 
 	int16_t *sample_pointer = samples;
 
-	int16_t sample_point, peak_0=0, peak_1=0;
+	/* int, not int16_t: abs(-32768) is 32768, which doesn't fit in int16_t. */
+	int sample_point, peak_0=0, peak_1=0;
 
 	if (same_endianness) {
 		for (j=0 ; j<sample_group_size ; j++) {
