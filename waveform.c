@@ -39,9 +39,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <inttypes.h>
 #include <string.h>
 #include <getopt.h>
 #include <math.h>
+
+#define WAVE_FORMAT_PCM        1
+#define WAVE_FORMAT_EXTENSIBLE -2  /* 0xFFFE interpreted as int16_t */
 
 /* My structures are representation of file data structures and must be
  * used exactly as shown. */
@@ -170,7 +174,7 @@ int* get_sample_group_sizes(int sample_count, int points) {
 
 	sample_group_sizes = (int *) malloc(sizeof(int) * (points+1));
 
-	int i = 0, j = 0, k = 0, jump_counter;
+	int i = 0, jump_counter;
 
 	jump_counter = leftover - points;
 
@@ -304,13 +308,13 @@ int waveform_1_channel_8_bit_mean(int8_t *samples, int sample_group_size, Signin
 	if (file_signing == SIGNED) {
 		int8_t *sample_pointer = samples;
 		for (j=0 ; j<sample_group_size ; j++) {
-			sum_of_samples_0 += abs((int64_t)*sample_pointer);
+			sum_of_samples_0 += llabs((int64_t)*sample_pointer);
 			sample_pointer++;
 		}
 	} else {
 		uint8_t *u_sample_pointer = (uint8_t*)samples;
 		for (j=0 ; j<sample_group_size ; j++) {
-			sum_of_samples_0 += abs((int64_t)*u_sample_pointer - 128);
+			sum_of_samples_0 += llabs((int64_t)*u_sample_pointer - 128);
 			u_sample_pointer++;
 		}
 	}
@@ -332,23 +336,23 @@ int waveform_2_channel_8_bit_mean(int8_t *samples, int sample_group_size, Signin
 
 	int j;
 
-	int64_t sample_point, sum_of_samples_0=0, sum_of_samples_1=0;
+	int64_t sum_of_samples_0=0, sum_of_samples_1=0;
 	double mean_0, mean_1;
 
 	if (file_signing == SIGNED) {
 		int8_t *sample_pointer = samples;
 		for (j=0 ; j<sample_group_size ; j++) {
-			sum_of_samples_0 += abs((int64_t)*sample_pointer);
+			sum_of_samples_0 += llabs((int64_t)*sample_pointer);
 			sample_pointer++;
-			sum_of_samples_1 += abs((int64_t)*sample_pointer);
+			sum_of_samples_1 += llabs((int64_t)*sample_pointer);
 			sample_pointer++;
 		}
 	} else {
 		uint8_t *u_sample_pointer = (uint8_t*)samples;
 		for (j=0 ; j<sample_group_size ; j++) {
-			sum_of_samples_0 += abs((int64_t)*u_sample_pointer - 128);
+			sum_of_samples_0 += llabs((int64_t)*u_sample_pointer - 128);
 			u_sample_pointer++;
-			sum_of_samples_1 += abs((int64_t)*u_sample_pointer - 128);
+			sum_of_samples_1 += llabs((int64_t)*u_sample_pointer - 128);
 			u_sample_pointer++;
 		}
 	}
@@ -546,7 +550,7 @@ int waveform_1_channel_16_bit_mean(int16_t *samples, int sample_group_size, int 
 
 	int16_t *sample_pointer = samples;
 
-	int64_t sample_point, sum_of_samples_0=0;
+	int64_t sum_of_samples_0=0;
 	double mean_0;
 
 	if (same_endianness) {
@@ -580,7 +584,7 @@ int waveform_2_channel_16_bit_mean(int16_t *samples, int sample_group_size, int 
 
 	int16_t *sample_pointer = samples;
 
-	int64_t sample_point, sum_of_samples_0=0, sum_of_samples_1=0;
+	int64_t sum_of_samples_0=0, sum_of_samples_1=0;
 	double mean_0, mean_1;
 
 	if (same_endianness) {
@@ -1257,16 +1261,21 @@ int waveform_2_channel(FILE *fd, int *sample_group_sizes, int bits_per_sample, A
 int calculate_waveform(FILE *fd, int sample_count, int channel_count, int bits_per_sample, Algo_t algorithm, Endianness_t machine_endianness, Endianness_t data_endianness, Signing_t file_signing) {
 
 	int* sample_group_sizes = get_sample_group_sizes(sample_count, points);
+	int result = 0;
 
 	if (channel_count == 1) {
-		return waveform_1_channel(fd, sample_group_sizes, bits_per_sample, algorithm, machine_endianness, data_endianness, file_signing);
+		result = waveform_1_channel(fd, sample_group_sizes, bits_per_sample, algorithm, machine_endianness, data_endianness, file_signing);
 	} else if (channel_count == 2) {
-		return waveform_2_channel(fd, sample_group_sizes, bits_per_sample, algorithm, machine_endianness, data_endianness, file_signing);
+		result = waveform_2_channel(fd, sample_group_sizes, bits_per_sample, algorithm, machine_endianness, data_endianness, file_signing);
+	} else {
+		fprintf(stderr, "Only 1 or 2 channel files are supported, got %d\n", channel_count);
+		free(sample_group_sizes);
+		exit(1);
 	}
 
 	free(sample_group_sizes);
 
-	return(0);
+	return result;
 }
 
 /* This is confusing because an item in a chunk is a sample pair, and
@@ -1275,7 +1284,7 @@ int calculate_waveform(FILE *fd, int sample_count, int channel_count, int bits_p
 int calculate_waveform_from_raw(int16_t **chunks, int items_in_chunk, int sample_count, Algo_t algorithm) {
 	int* sample_group_sizes = get_sample_group_sizes(sample_count, points);
 
-	int i, items_read;
+	int i;
 
 	int (*funcptr)(int16_t*, int, int);
 
@@ -1330,7 +1339,7 @@ int calculate_waveform_from_raw(int16_t **chunks, int items_in_chunk, int sample
 }
 
 int main(int argc, char **argv) {
-	int i = 0, j = 0, k = 0; /* for use in loops */
+	int i = 0; /* for use in loops */
 
 	int c;
 
@@ -1402,16 +1411,21 @@ See README for more details.\n", argv[0]);
 		exit(0);
 	}
 
+	if (use_peak + use_mean + use_rms > 1) {
+		fprintf(stderr, "Pick only one of --peak, --mean, or --rms\n");
+		exit(1);
+	}
+
 	if (!use_peak && !use_mean && !use_rms) use_rms = 1;
 
-	Algo_t algorithm;
+	/* Earlier guards ensure exactly one of use_peak/use_mean/use_rms is set,
+	 * but we initialize so the compiler can prove definedness. */
+	Algo_t algorithm = RMS;
 
 	if (use_peak) {
 		algorithm = PEAK;
 	} else if (use_mean) {
 		algorithm = MEAN;
-	} else if (use_rms) {
-		algorithm = RMS;
 	}
 
 	if (verbose_flag) {
@@ -1432,7 +1446,7 @@ See README for more details.\n", argv[0]);
 		if (debug_flag) fprintf(stderr, "confused about algorithm\n");
 	}
 
-	char* filename;
+	char* filename = NULL;
 
 	if (debug_flag) fprintf(stderr, "optind %d, argc %d\n", optind, argc);
 
@@ -1492,7 +1506,7 @@ See README for more details.\n", argv[0]);
 		 * all in to memory so that we'll know how big it is, then we'll
 		 * run the proper algorithm.  We'll read it in 1MB chunks.  */
 
-		int64_t total_chunks = 0, item_size = 4, items_in_chunk = 250000, sample_count;
+		int64_t total_chunks = 0, item_size = 4, items_in_chunk = 250000, sample_count = 0;
 
 		/* Hard coding a maximum size here of 200 chunks.  That would be
 		 * almost 20 minutes of audio, something of that size should be
@@ -1507,7 +1521,7 @@ See README for more details.\n", argv[0]);
 
 			sample_count += items_read;
 			total_chunks++;
-	
+
 	   	if (items_read < items_in_chunk) {
 				if (feof(stdin)) {
 					break;
@@ -1518,14 +1532,20 @@ See README for more details.\n", argv[0]);
 			}
 		}
 
+		/* If we hit chunk_limit without seeing EOF in the read loop, sniff
+		 * one more byte to distinguish "input is exactly chunk_limit chunks"
+		 * from "input is longer than we can handle". */
 		if (total_chunks >= chunk_limit) {
-			fprintf(stderr, "Too much data\n");
-			exit(1);
+			char sentinel;
+			if (fread(&sentinel, 1, 1, stdin) > 0) {
+				fprintf(stderr, "Too much data\n");
+				exit(1);
+			}
 		}
 
 		/* We now have a bunch of samples, time to do whatever with them. */
 
-		if (debug_flag) fprintf(stderr, "Sample Count: %d\n", sample_count);
+		if (debug_flag) fprintf(stderr, "Sample Count: %" PRId64 "\n", sample_count);
 	
 		calculate_waveform_from_raw(chunks, items_in_chunk, sample_count, algorithm);
 
@@ -1650,9 +1670,11 @@ See README for more details.\n", argv[0]);
 		*/
 	
 		int we_are_done = 0;
-	
-		int bits_per_sample, channel_count, sample_count, block_align;
-		int32_t sample_rate;
+
+		/* Initialized to 0 so we can detect a data/SSND chunk that arrives
+		 * before its describing fmt/COMM chunk. */
+		int bits_per_sample = 0, channel_count = 0, sample_count = 0, block_align = 0;
+		int32_t sample_rate = 0;
 	
 		while (!we_are_done) {
 	
@@ -1721,7 +1743,7 @@ See README for more details.\n", argv[0]);
 				int16_t audio_format = (machine_endianness != file_endianness ?  swap_int16(fmt_chunk.audio_format) : fmt_chunk.audio_format);
 				int16_t extended_size = (machine_endianness != file_endianness ?  swap_int16(fmt_chunk.extended_size) : fmt_chunk.extended_size);
 
-				if (audio_format == -2) {
+				if (audio_format == WAVE_FORMAT_EXTENSIBLE) {
 
 					if (extended_size == 0) {
 						fprintf(stderr, "Expecting extended fmt chunk, but it's missing\n");
@@ -1730,8 +1752,8 @@ See README for more details.\n", argv[0]);
 
 					audio_format = (machine_endianness != file_endianness ?  swap_int16(fmt_chunk.ext_audio_format) : fmt_chunk.ext_audio_format);
 				}
-	
-				if (audio_format != 1) {
+
+				if (audio_format != WAVE_FORMAT_PCM) {
 					fprintf(stderr, "Unusable wave format tag: %d\n", audio_format);
 					exit(1);
 				}
@@ -1756,11 +1778,16 @@ See README for more details.\n", argv[0]);
 			} else if (strncmp(chunk_header.chunk_type, "data", 4) == 0) {
 				if (debug_flag) fprintf(stderr, "Found data chunk with length %d\n", chunk_length);
 				we_are_done = 1;
-	
+
+				if (bits_per_sample == 0 || channel_count == 0) {
+					fprintf(stderr, "data chunk seen before fmt chunk; cannot continue\n");
+					exit(1);
+				}
+
 				sample_count = chunk_length / (bits_per_sample * channel_count / 8);
-	
+
 				if (debug_flag) fprintf(stderr, "Sample Count: %d\n", sample_count);
-	
+
 				calculate_waveform(stdin, sample_count, channel_count, bits_per_sample, algorithm, machine_endianness, data_endianness, file_signing);
 	
 			} else if (strncmp(chunk_header.chunk_type, "COMM", 4) == 0) {
@@ -1802,7 +1829,12 @@ See README for more details.\n", argv[0]);
 			} else if (strncmp(chunk_header.chunk_type, "SSND", 4) == 0) {
 				if (debug_flag) fprintf(stderr, "Found SSND chunk with length %d\n", chunk_length);
 				we_are_done = 1;
-	
+
+				if (bits_per_sample == 0 || channel_count == 0 || sample_count == 0) {
+					fprintf(stderr, "SSND chunk seen before COMM chunk; cannot continue\n");
+					exit(1);
+				}
+
 				/* The first 8 bytes are offset and blocksize */
 				struct {
 					uint32_t ssnd_offset, ssnd_blocksize;
